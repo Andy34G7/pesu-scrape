@@ -1,0 +1,8 @@
+flask
+flask-cors
+requests
+pypdf
+img2pdf
+Spire.Presentation
+beautifulsoup4
+Spire.Doc
