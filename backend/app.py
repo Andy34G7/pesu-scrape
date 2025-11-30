@@ -4,7 +4,17 @@ from pesu_client import PESUClient
 import os
 import json
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static', static_url_path='/')
+
+@app.route('/')
+def serve():
+    return app.send_static_file('index.html')
+
+@app.errorhandler(404)
+def not_found(e):
+    if request.path.startswith('/api/'):
+        return jsonify({"error": "Not found"}), 404
+    return app.send_static_file('index.html')
 app.secret_key = os.urandom(24) # Required for session management
 CORS(app, supports_credentials=True) # Enable CORS for all routes with credentials
 
