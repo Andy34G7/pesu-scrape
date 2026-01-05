@@ -13,10 +13,10 @@ WORKDIR /app
 # Install system dependencies for Spire and general utility
 # fonts-liberation and fontconfig are crucial for document rendering
 # libgl1-mesa-glx and libglib2.0-0 are common dependencies for graphics/rendering libs
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-liberation \
     fontconfig \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
