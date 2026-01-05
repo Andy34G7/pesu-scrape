@@ -7,7 +7,7 @@ function UnitGrid({ units, selectedUnit, onSelectUnit, loading }) {
 
     return (
         <div className="units-section">
-            <h3>Units</h3>
+            <h3 className="text-xl font-bold mb-6 text-[var(--foreground)]">Units</h3>
             <div className="units-grid">
                 {units.map(unit => (
                     <div

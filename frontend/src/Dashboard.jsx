@@ -243,27 +243,31 @@ function Dashboard() {
             <div className="main-content">
                 {selectedCourse ? (
                     <>
-                        <div className="header-actions">
-                            <h2 className="content-title">{selectedCourse.subjectName}</h2>
-                            <div className="resource-toggle">
-                                <button
-                                    className={`toggle-btn ${resourceType === '2' ? 'active' : ''}`}
-                                    onClick={() => {
-                                        console.log('Switching to Slides (2)');
-                                        setResourceType('2');
-                                    }}
-                                >
-                                    Slides
-                                </button>
-                                <button
-                                    className={`toggle-btn ${resourceType === '3' ? 'active' : ''}`}
-                                    onClick={() => {
-                                        console.log('Switching to Notes (3)');
-                                        setResourceType('3');
-                                    }}
-                                >
-                                    Notes
-                                </button>
+                        <div className="main-header">
+                            <div className="header-left">
+                                <h1>{selectedCourse.subjectName}</h1>
+                            </div>
+                            <div className="header-actions">
+                                <div className="resource-toggle">
+                                    <button
+                                        className={`toggle-btn ${resourceType === '2' ? 'active' : ''}`}
+                                        onClick={() => {
+                                            console.log('Switching to Slides (2)');
+                                            setResourceType('2');
+                                        }}
+                                    >
+                                        Slides
+                                    </button>
+                                    <button
+                                        className={`toggle-btn ${resourceType === '3' ? 'active' : ''}`}
+                                        onClick={() => {
+                                            console.log('Switching to Notes (3)');
+                                            setResourceType('3');
+                                        }}
+                                    >
+                                        Notes
+                                    </button>
+                                </div>
                             </div>
                         </div>
 

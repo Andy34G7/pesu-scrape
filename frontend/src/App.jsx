@@ -16,7 +16,7 @@ function App() {
 
   return (
     <div className="app-container">
-      <Toaster position="top-right" />
+      <Toaster position="bottom-right" />
       {!isLoggedIn ? (
         <Login onLogin={handleLogin} />
       ) : (

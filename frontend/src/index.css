@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@300..900&family=Red+Hat+Text:wght@300..700&display=swap');
+@import "tailwindcss";
 
 :root {
   --radius: 0.625rem;
