@@ -1,5 +1,5 @@
 import React from 'react';
-import { Star } from 'lucide-react';
+import { Star, Search } from 'lucide-react';
 
 function Sidebar({
     courses,
@@ -28,13 +28,28 @@ function Sidebar({
                 </button>
             </div>
             <div className="search-sort-controls">
-                <input
-                    type="text"
-                    placeholder="Search courses..."
-                    value={searchTerm}
-                    onChange={(e) => onSearchChange(e.target.value)}
-                    className="search-input"
-                />
+                <div className="search-wrapper" style={{ position: 'relative', flex: 1 }}>
+                    <Search
+                        size={18}
+                        className="search-icon"
+                        style={{
+                            position: 'absolute',
+                            left: '12px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            color: 'var(--muted-foreground)',
+                            pointerEvents: 'none'
+                        }}
+                    />
+                    <input
+                        type="text"
+                        placeholder="Search courses..."
+                        value={searchTerm}
+                        onChange={(e) => onSearchChange(e.target.value)}
+                        className="search-input"
+                        style={{ paddingLeft: '38px' }}
+                    />
+                </div>
                 <button
                     onClick={() => onSortChange(prev => prev === 'asc' ? 'desc' : 'asc')}
                     className="sort-btn"

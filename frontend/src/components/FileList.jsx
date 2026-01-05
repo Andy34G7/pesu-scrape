@@ -1,4 +1,5 @@
 import React from 'react';
+import { Download } from 'lucide-react';
 
 function FileList({ files, loading, downloading, onDownloadAll, onDownloadSingle, resourceType }) {
     return (
@@ -9,7 +10,9 @@ function FileList({ files, loading, downloading, onDownloadAll, onDownloadSingle
                     className="download-btn"
                     onClick={onDownloadAll}
                     disabled={downloading || files.length === 0}
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
                 >
+                    <Download size={16} />
                     {downloading ? 'Processing...' : 'Download All Merged'}
                 </button>
             </div>
@@ -27,8 +30,9 @@ function FileList({ files, loading, downloading, onDownloadAll, onDownloadSingle
                                 onClick={() => onDownloadSingle(cls)}
                                 title="Download Single File"
                                 disabled={downloading}
+                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                             >
-                                ⬇️
+                                <Download size={16} />
                             </button>
                         </li>
                     ))}

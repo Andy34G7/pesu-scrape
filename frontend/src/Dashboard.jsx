@@ -271,23 +271,25 @@ function Dashboard() {
                             </div>
                         </div>
 
-                        <UnitGrid
-                            units={units}
-                            selectedUnit={selectedUnit}
-                            onSelectUnit={handleUnitSelect}
-                            loading={loadingUnits}
-                        />
-
-                        {selectedUnit && (
-                            <FileList
-                                files={classes}
-                                loading={loadingClasses}
-                                downloading={downloading}
-                                onDownloadAll={handleDownload}
-                                onDownloadSingle={handleSingleDownload}
-                                resourceType={resourceType}
+                        <div className="content-area">
+                            <UnitGrid
+                                units={units}
+                                selectedUnit={selectedUnit}
+                                onSelectUnit={handleUnitSelect}
+                                loading={loadingUnits}
                             />
-                        )}
+
+                            {selectedUnit && (
+                                <FileList
+                                    files={classes}
+                                    loading={loadingClasses}
+                                    downloading={downloading}
+                                    onDownloadAll={handleDownload}
+                                    onDownloadSingle={handleSingleDownload}
+                                    resourceType={resourceType}
+                                />
+                            )}
+                        </div>
                     </>
                 ) : (
                     <div className="empty-state">
