@@ -649,3 +649,123 @@ h1, h2, h3, h4, h5, h6 {
   opacity: 0.7;
   cursor: not-allowed;
 }
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  /* Dashboard Container */
+  .dashboard-container {
+    position: relative;
+  }
+
+  /* Sidebar - Drawer Behavior */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 280px;
+    z-index: 50;
+    transform: translateX(-100%);
+    box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  /* Overlay */
+  .mobile-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(2px);
+    z-index: 40;
+    animation: fadeIn 0.3s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  /* Menu Button */
+  .mobile-menu-btn {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--foreground);
+    padding: 0.5rem;
+    cursor: pointer;
+    margin-right: 0.5rem;
+    border-radius: var(--radius);
+  }
+
+  .mobile-menu-btn:hover {
+    background-color: var(--secondary);
+  }
+
+  /* Absolute Menu Button for Empty State */
+  .absolute-menu-btn {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+  }
+
+  /* Sidebar Close Button */
+  .mobile-close-btn {
+    display: block !important;
+    background: transparent;
+    border: none;
+    color: var(--muted-foreground);
+    cursor: pointer;
+    padding: 0.5rem;
+    margin-left: auto;
+    border-radius: var(--radius);
+  }
+  
+  .mobile-close-btn:hover {
+    background-color: var(--sidebar-accent);
+    color: var(--foreground);
+  }
+
+  /* Adjust Main Content */
+  .main-header {
+    padding: 1rem;
+  }
+  
+  .header-left h1 {
+    font-size: 1.2rem;
+  }
+
+  .content-area {
+    padding: 1rem;
+  }
+
+  /* Adjust Grid for smaller screens */
+  .units-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 1rem;
+  }
+
+  .unit-card {
+    padding: 1rem;
+  }
+
+  .file-item {
+    padding: 0.75rem 1rem;
+  }
+}
+
+/* Default hidden elements for desktop */
+.mobile-menu-btn {
+  display: none;
+}
+
+.mobile-close-btn {
+  display: none;
+}

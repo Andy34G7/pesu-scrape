@@ -1,5 +1,5 @@
 import React from 'react';
-import { Star, Search } from 'lucide-react';
+import { Star, Search, X } from 'lucide-react'; // Added X icon
 
 function Sidebar({
     courses,
@@ -13,10 +13,12 @@ function Sidebar({
     favorites,
     onToggleFavorite,
     showFavoritesOnly,
-    onToggleShowFavorites
+    onToggleShowFavorites,
+    isOpen,
+    onClose
 }) {
     return (
-        <div className="sidebar">
+        <div className={`sidebar ${isOpen ? 'open' : ''}`}>
             <div className="sidebar-header">
                 <h2>Courses</h2>
                 <button
@@ -25,6 +27,13 @@ function Sidebar({
                     title="Show Favorites Only"
                 >
                     <Star size={18} fill={showFavoritesOnly ? "currentColor" : "none"} />
+                </button>
+                {/* Mobile Close Button */}
+                <button
+                    className="mobile-close-btn"
+                    onClick={onClose}
+                >
+                    <X size={20} />
                 </button>
             </div>
             <div className="search-sort-controls">

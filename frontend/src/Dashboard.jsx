@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import { Menu, X } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import UnitGrid from './components/UnitGrid';
 import FileList from './components/FileList';
@@ -25,6 +26,7 @@ function Dashboard() {
         return saved ? JSON.parse(saved) : [];
     });
     const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     useEffect(() => {
         fetchCourses();
@@ -225,10 +227,20 @@ function Dashboard() {
                 onClose={() => setIsCmdOpen(false)}
             />
 
+            {isSidebarOpen && (
+                <div
+                    className="mobile-overlay"
+                    onClick={() => setIsSidebarOpen(false)}
+                />
+            )}
+
             <Sidebar
                 courses={filteredCourses}
                 selectedCourse={selectedCourse}
-                onSelectCourse={handleCourseSelect}
+                onSelectCourse={(course) => {
+                    handleCourseSelect(course);
+                    setIsSidebarOpen(false); // Close on selection on mobile
+                }}
                 searchTerm={searchTerm}
                 onSearchChange={setSearchTerm}
                 sortOrder={sortOrder}
@@ -238,6 +250,8 @@ function Dashboard() {
                 onToggleFavorite={toggleFavorite}
                 showFavoritesOnly={showFavoritesOnly}
                 onToggleShowFavorites={() => setShowFavoritesOnly(prev => !prev)}
+                isOpen={isSidebarOpen}
+                onClose={() => setIsSidebarOpen(false)}
             />
 
             <div className="main-content">
@@ -245,6 +259,12 @@ function Dashboard() {
                     <>
                         <div className="main-header">
                             <div className="header-left">
+                                <button
+                                    className="mobile-menu-btn"
+                                    onClick={() => setIsSidebarOpen(true)}
+                                >
+                                    <Menu size={24} />
+                                </button>
                                 <h1>{selectedCourse.subjectName}</h1>
                             </div>
                             <div className="header-actions">
@@ -293,6 +313,12 @@ function Dashboard() {
                     </>
                 ) : (
                     <div className="empty-state">
+                        <button
+                            className="mobile-menu-btn absolute-menu-btn"
+                            onClick={() => setIsSidebarOpen(true)}
+                        >
+                            <Menu size={24} />
+                        </button>
                         <div style={{ fontSize: '4rem', marginBottom: '1rem', opacity: 0.2 }}>📚</div>
                         <h3>Select a course to view details</h3>
                         <p style={{ color: 'var(--muted-foreground)', marginBottom: '1.5rem' }}>
