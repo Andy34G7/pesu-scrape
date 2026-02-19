@@ -6,3 +6,4 @@ img2pdf
 Spire.Presentation
 beautifulsoup4
 Spire.Doc
+python-pptx

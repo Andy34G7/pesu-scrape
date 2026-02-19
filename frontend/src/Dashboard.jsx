@@ -110,7 +110,13 @@ function Dashboard() {
             const cleanId = course.id.replace(/\\|"/g, '');
             const response = await fetch(`/api/units/${cleanId}`);
             const data = await response.json();
-            setUnits(data);
+            if (Array.isArray(data)) {
+                setUnits(data);
+            } else {
+                console.error('Units data is not an array:', data);
+                setUnits([]);
+                toast.error('Failed to load units. Please try logging in again.');
+            }
         } catch (error) {
             console.error('Error fetching units:', error);
             toast.error('Failed to load units');
@@ -125,7 +131,13 @@ function Dashboard() {
         try {
             const response = await fetch(`/api/classes/${unit.unitId}`);
             const data = await response.json();
-            setClasses(data);
+            if (Array.isArray(data)) {
+                setClasses(data);
+            } else {
+                console.error('Classes data is not an array:', data);
+                setClasses([]);
+                toast.error('Failed to load classes. Please try logging in again.');
+            }
         } catch (error) {
             console.error('Error fetching classes:', error);
             toast.error('Failed to load files');

@@ -15,7 +15,7 @@ def not_found(e):
     if request.path.startswith('/api/'):
         return jsonify({"error": "Not found"}), 404
     return app.send_static_file('index.html')
-app.secret_key = os.urandom(24) # Required for session management
+app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24)) # Required for session management
 CORS(app, supports_credentials=True) # Enable CORS for all routes with credentials
 
 # Global client store (simple version for single user demo, ideally use session-based storage or redis)
@@ -125,8 +125,10 @@ def download_merged():
     client = get_client(user_id)
     
     # Create temp directory using absolute path
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    temp_dir = os.path.join(base_dir, f"temp_{user_id}")
+    # Create temp directory using system temp path
+    import tempfile
+    base_temp = tempfile.gettempdir()
+    temp_dir = os.path.join(base_temp, f"pesu_temp_{user_id}")
     os.makedirs(temp_dir, exist_ok=True)
     
     downloaded_pdfs = []
