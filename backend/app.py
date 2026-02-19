@@ -2,6 +2,10 @@ from flask import Flask, jsonify, request, session
 from flask_cors import CORS
 from pesu_client import PESUClient
 import os
+import os
+# Set this BEFORE importing any library that relies on .NET (like Spire) via pdf_utils check
+os.environ['DOTNET_SYSTEM_GLOBALIZATION_INVARIANT'] = '1'
+
 import json
 
 app = Flask(__name__, static_folder='static', static_url_path='/')
