@@ -218,7 +218,11 @@ def download_merged():
         shutil.rmtree(temp_dir, ignore_errors=True)
         return jsonify({"error": "Failed to download or convert any files"}), 500
         
-    output_filename = f"{course_name}_{unit_name}.pdf".replace(" ", "_")
+    # Sanitize filename
+    import re
+    safe_course_name = re.sub(r'[^\w\-_.]', '_', course_name)
+    safe_unit_name = re.sub(r'[^\w\-_.]', '_', unit_name)
+    output_filename = f"{safe_course_name}_{safe_unit_name}.pdf"
     output_path = os.path.join(temp_dir, output_filename)
     
     try:
