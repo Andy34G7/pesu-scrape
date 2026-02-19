@@ -140,12 +140,30 @@ class PESUClient:
                'application/vnd.openxmlformats-officedocument.presentationml.presentation' in content_type or \
                'application/vnd.ms-powerpoint' in content_type or \
                'application/vnd.openxmlformats-officedocument.wordprocessingml.document' in content_type or \
-               'application/msword' in content_type:
+               'application/vnd.openxmlformats-officedocument.wordprocessingml.document' in content_type or \
+               'application/msword' in content_type or \
+               'application/octet-stream' in content_type or \
+               'binary/octet-stream' in content_type:
+                
+                # Try to get filename from Content-Disposition
+                filename = None
+                if 'Content-Disposition' in response.headers:
+                    import cgi
+                    _, params = cgi.parse_header(response.headers['Content-Disposition'])
+                    filename = params.get('filename')
+                
+                final_output_path = output_path
+                if filename:
+                     # Clean filename
+                     filename = os.path.basename(filename)
+                     dir_name = os.path.dirname(output_path)
+                     final_output_path = os.path.join(dir_name, filename)
+                     
                 # Direct download
-                with open(output_path, 'wb') as f:
+                with open(final_output_path, 'wb') as f:
                     for chunk in response.iter_content(chunk_size=8192):
                         f.write(chunk)
-                return True, [output_path]
+                return True, [final_output_path]
             
             elif 'text/html' in content_type:
                 # Parse for download link

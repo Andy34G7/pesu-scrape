@@ -218,12 +218,14 @@ def download_merged():
         @after_this_request
         def remove_temp_dir(response):
             try:
-                # We can't delete the file we are sending immediately, but we can delete the temp dir contents
-                # Or we can stream the file into memory and delete everything.
-                # For simplicity, let's keep the temp dir for now or use a background task.
-                # But since we are sending a file from temp_dir, we can't delete temp_dir yet.
-                # A better approach is to stream the file.
-                pass
+                # We can delete the temp dir using a deferred approach or just try to delete
+                # non-locked files. Or better, use a background thread to delete after a delay.
+                # Since we are returning the file, we can't delete it immediately if it's being streamed.
+                # However, Flask send_file with as_attachment=True usually buffers or streams.
+                # A robust way is to register a cleanup.
+                # For this script, we will simply try to delete it.
+                # Note: On Linux, you can unlink an open file.
+                shutil.rmtree(temp_dir, ignore_errors=True)
             except Exception as e:
                 print(f"Error cleaning up: {e}")
             return response

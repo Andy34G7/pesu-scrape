@@ -39,7 +39,33 @@ function Dashboard() {
         };
 
         window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
+
+        // Triple tap detection
+        let lastTap = 0;
+        let tapCount = 0;
+
+        const handleTouchStart = (e) => {
+            const currentTime = new Date().getTime();
+            const tapLength = currentTime - lastTap;
+
+            if (tapLength < 500 && tapLength > 0) {
+                tapCount++;
+                if (tapCount === 3) {
+                    setIsCmdOpen(true);
+                    tapCount = 0; // Reset
+                }
+            } else {
+                tapCount = 1;
+            }
+            lastTap = currentTime;
+        };
+
+        window.addEventListener('touchstart', handleTouchStart);
+
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('touchstart', handleTouchStart);
+        };
     }, []);
 
     useEffect(() => {
