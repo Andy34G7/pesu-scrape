@@ -170,8 +170,8 @@ class PESUClient:
                 soup = BeautifulSoup(response.text, "html.parser")
                 download_urls = []
                 
-                # Check for loadIframe or downloadslidecoursedoc
-                for link in soup.find_all('a'):
+                # Check for loadIframe or downloadslidecoursedoc or downloadcoursedoc
+                for link in soup.find_all(['a', 'div', 'span', 'i', 'p']):
                     onclick = link.get('onclick', '')
                     href = link.get('href', '')
                     
@@ -182,6 +182,11 @@ class PESUClient:
                             url_to_add = match.group(1)
                     elif 'downloadslidecoursedoc' in href:
                         url_to_add = href
+                    elif 'downloadcoursedoc' in onclick:
+                        match = re.search(r"downloadcoursedoc\(['\"]([^'\"]+)['\"]\)", onclick)
+                        if match:
+                            doc_id = match.group(1)
+                            url_to_add = f"/Academy/a/k/curriculum/downloadCourseDoc/{doc_id}"
                     
                     if url_to_add:
                         # Normalize URL
