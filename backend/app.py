@@ -65,6 +65,17 @@ def get_courses():
         if 'user_id' not in session:
             return jsonify({"error": "Unauthorized"}), 401
             
+        # Try to load local courses.json first as requested
+        courses_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'courses.json')
+        if os.path.exists(courses_path):
+            try:
+                with open(courses_path, 'r') as f:
+                    courses_data = json.load(f)
+                    return jsonify(courses_data)
+            except Exception as json_e:
+                print(f"Error reading courses.json: {json_e}")
+                # Fallthrough to client fetch
+        
         user_id = session['user_id']
         client = get_client(user_id)
         courses = client.get_subjects()

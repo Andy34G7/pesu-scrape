@@ -13,6 +13,57 @@ def download_file(url, session, output_path):
         return True
     return False
 
+def repair_pptx(pptx_path):
+    """
+    Attempts to repair a broken PPTX file by fixing common corruptions like
+    garbage bytes before the PK header or simple truncation.
+    Returns True if repaired or valid, False otherwise.
+    """
+    try:
+        import zipfile
+        
+        # Check if it's a valid zip first
+        if zipfile.is_zipfile(pptx_path):
+            try:
+                with zipfile.ZipFile(pptx_path, 'r') as z:
+                    if z.testzip() is not None:
+                        print(f"Zip file {pptx_path} has corrupted contents")
+                        return False
+                return True # Already valid
+            except zipfile.BadZipFile:
+                pass # Proceed to repair
+        
+        print(f"Attempting to repair {pptx_path}...")
+        
+        # Read file content
+        with open(pptx_path, 'rb') as f:
+            content = f.read()
+            
+        # 1. Look for PK header
+        pk_offset = content.find(b'PK\x03\x04')
+        if pk_offset > 0:
+            print(f"Found PK header at offset {pk_offset}, slicing...")
+            content = content[pk_offset:]
+            with open(pptx_path, 'wb') as f:
+                f.write(content)
+            
+            if zipfile.is_zipfile(pptx_path):
+                print(f"Repair successful: Sliced garbage bytes")
+                return True
+                
+        # 2. Check for unexpected end of file (truncation) - harder to fix without recovery tools
+        # But sometimes valid zips just have trailing garbage or are slightly off.
+        
+        # If we still can't open it as a zip, we can't do much without python-pptx
+        if not zipfile.is_zipfile(pptx_path):
+            print(f"Failed to repair {pptx_path}: Invalid zip structure")
+            return False
+            
+        return True
+    except Exception as e:
+        print(f"Error repairing PPTX: {e}")
+        return False
+
 def convert_pptx_to_pdf(pptx_path, pdf_path):
     try:
         presentation = Presentation()
@@ -22,6 +73,18 @@ def convert_pptx_to_pdf(pptx_path, pdf_path):
         return True
     except Exception as e:
         print(f"Error converting PPTX: {e}")
+        # Try to repair and convert again
+        try:
+             if repair_pptx(pptx_path):
+                 print(f"Retrying conversion for {pptx_path} after repair...")
+                 presentation = Presentation()
+                 presentation.LoadFromFile(pptx_path)
+                 presentation.SaveToFile(pdf_path, FileFormat.PDF)
+                 presentation.Dispose()
+                 return True
+        except Exception as repair_e:
+             print(f"Repair and retry failed: {repair_e}")
+             
         return False
 
 from spire.doc import Document, FileFormat as DocFileFormat

@@ -186,7 +186,8 @@ class PESUClient:
                         match = re.search(r"downloadcoursedoc\(['\"]([^'\"]+)['\"]\)", onclick)
                         if match:
                             doc_id = match.group(1)
-                            url_to_add = f"/Academy/a/k/curriculum/downloadCourseDoc/{doc_id}"
+                            # Updated URL based on user feedback (step 160)
+                            url_to_add = f"/Academy/a/referenceMeterials/downloadslidecoursedoc/{doc_id}"
                     
                     if url_to_add:
                         # Normalize URL
