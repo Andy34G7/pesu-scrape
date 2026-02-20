@@ -214,8 +214,8 @@ def download_merged():
         return processed_pdfs
 
     # Use ThreadPoolExecutor for parallel downloads
-    # Use ThreadPoolExecutor for parallel downloads, limited to 2 to prevent OOM
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+    # Use ThreadPoolExecutor for sequential downloads/conversions to prevent OOM on Render
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
         results = list(executor.map(process_file, files_to_download))
 
     # Flatten results

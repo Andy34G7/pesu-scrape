@@ -35,5 +35,5 @@ COPY --from=frontend-builder /app/frontend/dist ./static
 # Expose port
 EXPOSE 5000
 
-# Run with Gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
+# Run with Gunicorn, using threads and a longer timeout for lengthy downloads/conversions
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--timeout", "120", "--workers", "1", "--threads", "4", "app:app"]
