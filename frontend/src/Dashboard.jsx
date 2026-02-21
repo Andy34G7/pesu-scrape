@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, Sun, Moon } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import UnitGrid from './components/UnitGrid';
 import FileList from './components/FileList';
@@ -27,6 +27,25 @@ function Dashboard() {
     });
     const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+    const [isDark, setIsDark] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return document.documentElement.classList.contains('dark') ||
+                localStorage.getItem('theme') === 'dark' ||
+                (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        }
+        return true;
+    });
+
+    useEffect(() => {
+        if (isDark) {
+            document.documentElement.classList.add('dark');
+            localStorage.setItem('theme', 'dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+            localStorage.setItem('theme', 'light');
+        }
+    }, [isDark]);
 
     useEffect(() => {
         fetchCourses();
@@ -306,6 +325,13 @@ function Dashboard() {
                                 <h1>{selectedCourse.subjectName}</h1>
                             </div>
                             <div className="header-actions">
+                                <button
+                                    onClick={() => setIsDark(!isDark)}
+                                    className="p-2 rounded-full bg-secondary text-foreground hover:bg-accent transition-colors cursor-pointer flex items-center justify-center mr-2"
+                                    title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                                >
+                                    {isDark ? <Sun size={20} /> : <Moon size={20} />}
+                                </button>
                                 <div className="resource-toggle">
                                     <button
                                         className={`toggle-btn ${resourceType === '2' ? 'active' : ''}`}
@@ -350,12 +376,19 @@ function Dashboard() {
                         </div>
                     </>
                 ) : (
-                    <div className="empty-state">
+                    <div className="empty-state relative h-full flex flex-col items-center justify-center">
                         <button
                             className="mobile-menu-btn absolute-menu-btn"
                             onClick={() => setIsSidebarOpen(true)}
                         >
                             <Menu size={24} />
+                        </button>
+                        <button
+                            onClick={() => setIsDark(!isDark)}
+                            className="absolute top-4 right-4 md:right-8 p-2 rounded-full bg-secondary text-foreground hover:bg-accent transition-colors cursor-pointer flex items-center justify-center"
+                            title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                        >
+                            {isDark ? <Sun size={20} /> : <Moon size={20} />}
                         </button>
                         <div style={{ fontSize: '4rem', marginBottom: '1rem', opacity: 0.2 }}>📚</div>
                         <h3>Select a course to view details</h3>
@@ -363,7 +396,7 @@ function Dashboard() {
                             Choose a course from the sidebar to access slides and notes.
                         </p>
                         <div className="cmd-hint">
-                            Press <kbd style={{ background: 'var(--muted)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)' }}>Ctrl</kbd> + <kbd style={{ background: 'var(--muted)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)' }}>K</kbd> to search
+                            Press <kbd style={{ background: 'var(--muted)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)' }}>Ctrl</kbd> + <kbd style={{ background: 'var(--muted)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)' }}>K</kbd> to search or triple tap the screen
                         </div>
                     </div>
                 )}

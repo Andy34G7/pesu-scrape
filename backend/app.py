@@ -215,7 +215,7 @@ def download_merged():
 
     # Use ThreadPoolExecutor for parallel downloads
     # Use ThreadPoolExecutor for sequential downloads/conversions to prevent OOM on Render
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
         results = list(executor.map(process_file, files_to_download))
 
     # Flatten results
