@@ -21,21 +21,32 @@ function FileList({ files, loading, downloading, onDownloadAll, onDownloadSingle
                 <div className="loading">Loading files...</div>
             ) : files.length > 0 ? (
                 <ul className="file-list">
-                    {files.map(cls => (
-                        <li key={cls.classId} className="file-item">
-                            <span className="file-icon">📄</span>
-                            <span className="file-name">{cls.title || `File ${cls.classId}`}</span>
-                            <button
-                                className="icon-btn"
-                                onClick={() => onDownloadSingle(cls)}
-                                title="Download Single File"
-                                disabled={downloading}
-                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                            >
-                                <Download size={16} />
-                            </button>
-                        </li>
-                    ))}
+                    {files.map(cls => {
+                        const isUnavailable = resourceType === '3' ? cls.hasNotes === false : cls.hasSlides === false;
+                        const resourceName = resourceType === '3' ? 'notes' : 'slides';
+                        return (
+                            <li key={cls.classId} className={`file-item ${isUnavailable ? 'opacity-60' : ''}`}>
+                                <span className="file-icon">{isUnavailable ? '⚠️' : '📄'}</span>
+                                <span className="file-name" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    {cls.title || `File ${cls.classId}`}
+                                    {isUnavailable && (
+                                        <span style={{ fontSize: '0.75rem', opacity: 0.7, fontStyle: 'italic' }}>
+                                            (No {resourceName})
+                                        </span>
+                                    )}
+                                </span>
+                                <button
+                                    className="icon-btn"
+                                    onClick={() => onDownloadSingle(cls)}
+                                    title={isUnavailable ? `No ${resourceName} uploaded for this class` : "Download Single File"}
+                                    disabled={downloading || isUnavailable}
+                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                >
+                                    <Download size={16} />
+                                </button>
+                            </li>
+                        );
+                    })}
                 </ul>
             ) : (
                 <div className="no-items">No items found in this unit.</div>

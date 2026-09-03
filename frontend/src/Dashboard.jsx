@@ -63,7 +63,7 @@ function Dashboard() {
         let lastTap = 0;
         let tapCount = 0;
 
-        const handleTouchStart = (e) => {
+        const handleTouchStart = () => {
             const currentTime = new Date().getTime();
             const tapLength = currentTime - lastTap;
 
@@ -168,11 +168,24 @@ function Dashboard() {
     const handleDownload = async () => {
         if (!selectedCourse || !selectedUnit || classes.length === 0) return;
 
+        const availableClasses = classes.filter(cls => {
+            if (resourceType === '3') {
+                return cls.hasNotes !== false;
+            } else {
+                return cls.hasSlides !== false;
+            }
+        });
+
+        if (availableClasses.length === 0) {
+            toast.error(`No ${resourceType === '3' ? 'notes' : 'slides'} available in this unit.`);
+            return;
+        }
+
         setDownloading(true);
         const toastId = toast.loading(`Preparing ${resourceType === '2' ? 'Slides' : 'Notes'} download...`);
 
         try {
-            const files = classes.map(cls => ({
+            const files = availableClasses.map(cls => ({
                 classId: cls.classId,
                 name: cls.title
             }));
@@ -203,7 +216,14 @@ function Dashboard() {
                 a.remove();
                 toast.success('Download started!', { id: toastId });
             } else {
-                toast.error('Download failed', { id: toastId });
+                let errorMsg = 'Download failed';
+                try {
+                    const errData = await response.json();
+                    if (errData && errData.error) errorMsg = errData.error;
+                } catch {
+                    // Fall back to default error message if response is not JSON
+                }
+                toast.error(errorMsg, { id: toastId });
             }
         } catch (error) {
             console.error('Download error:', error);
@@ -247,7 +267,14 @@ function Dashboard() {
                 document.body.removeChild(a);
                 toast.success('Download complete!', { id: toastId });
             } else {
-                toast.error('Download failed', { id: toastId });
+                let errorMsg = 'Download failed';
+                try {
+                    const errData = await response.json();
+                    if (errData && errData.error) errorMsg = errData.error;
+                } catch {
+                    // Fall back to default error message if response is not JSON
+                }
+                toast.error(errorMsg, { id: toastId });
             }
         } catch (error) {
             console.error('Single download error:', error);

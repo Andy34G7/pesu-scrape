@@ -1,8 +1,18 @@
 import os
+os.environ.setdefault("DOTNET_SYSTEM_GLOBALIZATION_INVARIANT", "1")
 import requests
 from pypdf import PdfWriter
 import img2pdf
 from spire.presentation import Presentation, FileFormat
+
+def convert_image_to_pdf(image_path, pdf_path):
+    try:
+        with open(pdf_path, "wb") as f:
+            f.write(img2pdf.convert(image_path))
+        return True
+    except Exception as e:
+        print(f"Error converting image to PDF: {e}")
+        return False
 
 def download_file(url, session, output_path):
     response = session.get(url, stream=True)
