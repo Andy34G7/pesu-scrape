@@ -7,3 +7,5 @@ Spire.Presentation
 beautifulsoup4
 Spire.Doc
 python-pptx
+mcp>=1.0.0
+python-dotenv

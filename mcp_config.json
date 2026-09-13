@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "pesu-academy": {
+      "command": "./backend/venv/bin/python",
+      "args": [
+        "mcp_server.py"
+      ],
+      "env": {
+        "DOTNET_SYSTEM_GLOBALIZATION_INVARIANT": "1"
+      }
+    }
+  }
+}

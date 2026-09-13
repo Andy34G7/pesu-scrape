@@ -1,16 +1,11 @@
-# Git
 .git
 .gitignore
-
-# Python
-backend/venv
-backend/__pycache__
-*.pyc
-
-# Node
-frontend/node_modules
-frontend/dist
-
-# Temp
-temp_*
-*.log
+.env
+.env.*
+backend/venv/
+backend/test_*.py
+frontend/node_modules/
+frontend/dist/
+**/__pycache__/
+**/*.pyc
+temp*

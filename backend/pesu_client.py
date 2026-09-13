@@ -1,11 +1,23 @@
 import os
+import sys
 import re
+import json
+import logging
 from urllib.parse import unquote
 import concurrent.futures
 import requests
 from bs4 import BeautifulSoup
 
+# Configure logger to output only to stderr so stdio MCP JSON-RPC protocol is never corrupted
+logger = logging.getLogger("pesu_client")
+if not logger.handlers:
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter("[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"))
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+
 BASE_URL = "https://www.pesuacademy.com/Academy"
+
 
 class PESUClient:
     def __init__(self):
@@ -15,6 +27,8 @@ class PESUClient:
         })
         self.csrf_token = None
         self.is_authenticated = False
+        self._username = None
+        self._password = None
         self._cached_courses = None
         self._cached_units = {}
         self._cached_classes = {}
@@ -33,25 +47,56 @@ class PESUClient:
 
     def _ensure_csrf_token(self):
         if not self.csrf_token:
-            profile_url = f"{BASE_URL}/s/studentProfilePESU"
-            resp = self.session.get(profile_url)
-            if resp.status_code == 200:
-                self.csrf_token = self._extract_csrf_token(resp.text)
-                if self.csrf_token:
-                    self.session.headers.update({"X-CSRF-TOKEN": self.csrf_token})
+            try:
+                profile_url = f"{BASE_URL}/s/studentProfilePESU"
+                resp = self.session.get(profile_url, timeout=10)
+                if resp.status_code == 200:
+                    self.csrf_token = self._extract_csrf_token(resp.text)
+                    if self.csrf_token:
+                        self.session.headers.update({
+                            "X-CSRF-TOKEN": self.csrf_token,
+                            "X-CSRF-Token": self.csrf_token,
+                            "X-Requested-With": "XMLHttpRequest",
+                            "Referer": f"{BASE_URL}/s/studentProfilePESU"
+                        })
+            except Exception as e:
+                logger.warning(f"Failed to refresh CSRF token: {e}")
         return self.csrf_token
+
+    def is_session_alive(self) -> bool:
+        if not self.is_authenticated:
+            return False
+        try:
+            profile_url = f"{BASE_URL}/s/studentProfilePESU"
+            resp = self.session.get(profile_url, allow_redirects=False, timeout=5)
+            if resp.status_code == 200 and "j_spring_security_check" not in resp.text:
+                return True
+        except Exception:
+            pass
+        return False
+
+    def _reauthenticate_if_needed(self) -> bool:
+        if self._username and self._password:
+            logger.info("Session expired or invalid. Auto re-authenticating with saved credentials...")
+            ok, msg = self.authenticate(self._username, self._password)
+            return ok
+        return False
 
     def authenticate(self, username, password):
         try:
             self.is_authenticated = False
+            self._username = username
+            self._password = password
+
             # Initial request to get CSRF token
-            response = self.session.get(BASE_URL)
+            response = self.session.get(BASE_URL, timeout=10)
             if response.status_code != 200:
+                logger.error(f"Failed to reach PESU Academy: HTTP {response.status_code}")
                 return False, "Failed to reach PESU Academy"
 
             csrf_token = self._extract_csrf_token(response.text)
             if not csrf_token:
-                print("Warning: Initial CSRF token not found")
+                logger.warning("Initial CSRF token not found on home page")
 
             payload = {
                 'j_username': username,
@@ -60,24 +105,32 @@ class PESUClient:
             }
             
             login_url = f"{BASE_URL}/j_spring_security_check"
-            response = self.session.post(login_url, data=payload)
+            response = self.session.post(login_url, data=payload, timeout=10)
             
             if "Invalid credentials" in response.text or "authfailed" in response.url or "login_error" in response.url:
+                logger.error("Authentication failed: Invalid credentials")
                 return False, "Invalid credentials"
             
             # Validate by accessing profile
             profile_url = f"{BASE_URL}/s/studentProfilePESU"
-            profile_response = self.session.get(profile_url, allow_redirects=False)
+            profile_response = self.session.get(profile_url, allow_redirects=False, timeout=10)
             
             if profile_response.status_code in (301, 302, 303, 307):
-                return False, "Login validation failed"
+                logger.error("Login validation failed: Redirect detected")
+                return False, "Login validation failed (session redirect)"
 
             if profile_response.status_code != 200:
+                logger.error(f"Login validation failed: HTTP {profile_response.status_code}")
                 return False, f"Login validation failed: HTTP {profile_response.status_code}"
 
             self.csrf_token = self._extract_csrf_token(profile_response.text)
             if self.csrf_token:
-                self.session.headers.update({"X-CSRF-TOKEN": self.csrf_token})
+                self.session.headers.update({
+                    "X-CSRF-TOKEN": self.csrf_token,
+                    "X-CSRF-Token": self.csrf_token,
+                    "X-Requested-With": "XMLHttpRequest",
+                    "Referer": f"{BASE_URL}/s/studentProfilePESU"
+                })
 
             self.is_authenticated = True
             # Reset session caches on fresh authentication
@@ -85,9 +138,11 @@ class PESUClient:
             self._cached_units = {}
             self._cached_classes = {}
 
+            logger.info(f"Successfully authenticated as {username}")
             return True, "Login successful"
         except Exception as e:
             self.is_authenticated = False
+            logger.error(f"Login error: {e}")
             return False, f"Login error: {str(e)}"
 
     def get_subjects(self, force_refresh=False):
@@ -96,85 +151,94 @@ class PESUClient:
 
         self._ensure_csrf_token()
 
+        all_courses = []
         try:
             sem_url = f"{BASE_URL}/s/studentProfile/getStudentSemestersPESU"
-            sem_resp = self.session.get(sem_url)
-            if sem_resp.status_code != 200:
-                print(f"Failed to fetch semesters: status {sem_resp.status_code}")
-                return []
+            sem_resp = self.session.get(sem_url, timeout=10)
+            if sem_resp.status_code == 200:
+                content = sem_resp.text.strip()
+                if content.startswith('"') and content.endswith('"'):
+                    try:
+                        content = json.loads(content)
+                    except Exception:
+                        pass
 
-            content = sem_resp.text.strip()
-            if content.startswith('"') and content.endswith('"'):
-                try:
-                    import json
-                    content = json.loads(content)
-                except Exception:
-                    pass
+                soup = BeautifulSoup(content, "html.parser")
+                semesters = []
+                for opt in soup.find_all("option"):
+                    val = opt.get("value")
+                    if val:
+                        clean_val = re.sub(r'[^\w-]', '', str(val)).strip()
+                        if clean_val:
+                            semesters.append((clean_val, opt.text.strip()))
 
-            soup = BeautifulSoup(content, "html.parser")
-            semesters = []
-            for opt in soup.find_all("option"):
-                val = opt.get("value")
-                if val:
-                    clean_val = re.sub(r'[^\w-]', '', str(val)).strip()
-                    if clean_val:
-                        semesters.append((clean_val, opt.text.strip()))
+                def fetch_semester_courses(sem):
+                    sem_id, sem_title = sem
+                    form_data = {
+                        "controllerMode": 6403,
+                        "actionType": 38,
+                        "id": sem_id,
+                        "menuId": 653,
+                        "_csrf": self.csrf_token
+                    }
+                    headers = {"X-CSRF-TOKEN": self.csrf_token} if self.csrf_token else {}
+                    try:
+                        resp = self.session.post(f"{BASE_URL}/s/studentProfilePESUAdmin", data=form_data, headers=headers, timeout=10)
+                        if resp.status_code != 200:
+                            return []
+                        s = BeautifulSoup(resp.text, "html.parser")
+                        rows = s.find_all("tr", id=lambda x: x and x.startswith("rowWiseCourseContent_"))
+                        sem_courses = []
+                        for row in rows:
+                            cid = row.get("id", "").replace("rowWiseCourseContent_", "").strip()
+                            tds = row.find_all("td")
+                            code = tds[0].get_text(strip=True) if len(tds) > 0 else ""
+                            name = tds[1].get_text(strip=True) if len(tds) > 1 else ""
+                            full_name = f"{code} - {name}" if code and not name.startswith(code) else (name or code)
+                            full_name = " ".join(full_name.split())
+                            sem_courses.append({
+                                "id": cid,
+                                "subjectCode": code,
+                                "subjectName": full_name,
+                                "semester": sem_title
+                            })
+                        return sem_courses
+                    except Exception as sem_err:
+                        logger.warning(f"Error fetching courses for sem {sem_id}: {sem_err}")
+                        return []
 
-            if not semesters:
-                print("No semesters found in getStudentSemestersPESU")
-                return []
+                if semesters:
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                        course_lists = list(executor.map(fetch_semester_courses, semesters))
 
-            def fetch_semester_courses(sem):
-                sem_id, sem_title = sem
-                form_data = {
-                    "controllerMode": 6403,
-                    "actionType": 38,
-                    "id": sem_id,
-                    "menuId": 653,
-                    "_csrf": self.csrf_token
-                }
-                headers = {"X-CSRF-TOKEN": self.csrf_token} if self.csrf_token else {}
-                resp = self.session.post(f"{BASE_URL}/s/studentProfilePESUAdmin", data=form_data, headers=headers)
-                if resp.status_code != 200:
-                    return []
-                s = BeautifulSoup(resp.text, "html.parser")
-                rows = s.find_all("tr", id=lambda x: x and x.startswith("rowWiseCourseContent_"))
-                sem_courses = []
-                for row in rows:
-                    cid = row.get("id", "").replace("rowWiseCourseContent_", "").strip()
-                    tds = row.find_all("td")
-                    code = tds[0].get_text(strip=True) if len(tds) > 0 else ""
-                    name = tds[1].get_text(strip=True) if len(tds) > 1 else ""
-                    full_name = f"{code} - {name}" if code and not name.startswith(code) else (name or code)
-                    full_name = " ".join(full_name.split())
-                    sem_courses.append({
-                        "id": cid,
-                        "subjectCode": code,
-                        "subjectName": full_name,
-                        "semester": sem_title
-                    })
-                return sem_courses
-
-            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-                course_lists = list(executor.map(fetch_semester_courses, semesters))
-
-            all_courses = []
-            seen_ids = set()
-            for clist in course_lists:
-                for c in clist:
-                    if c["id"] not in seen_ids:
-                        seen_ids.add(c["id"])
-                        all_courses.append(c)
-
-            self._cached_courses = all_courses
-            return all_courses
+                    seen_ids = set()
+                    for clist in course_lists:
+                        for c in clist:
+                            if c["id"] not in seen_ids:
+                                seen_ids.add(c["id"])
+                                all_courses.append(c)
 
         except Exception as e:
-            print(f"Error getting subjects: {e}")
-            return []
+            logger.error(f"Error scraping live subjects: {e}")
+
+        # Fallback to local courses.json database if live scraping returns empty
+        if not all_courses:
+            backend_dir = os.path.dirname(os.path.abspath(__file__))
+            courses_path = os.path.join(backend_dir, "courses.json")
+            if os.path.exists(courses_path):
+                try:
+                    with open(courses_path, "r", encoding="utf-8") as f:
+                        catalog = json.load(f)
+                        logger.info(f"Loaded {len(catalog)} courses from fallback catalog database")
+                        all_courses = catalog
+                except Exception as json_err:
+                    logger.error(f"Failed to load fallback courses.json: {json_err}")
+
+        self._cached_courses = all_courses
+        return all_courses
 
     def get_units(self, course_id):
-        course_id = str(course_id).strip().replace('\\', '').replace('"', '').replace("'", '')
+        course_id = str(course_id).strip().replace("\\", "").replace('"', '').replace("'", '')
         if course_id in self._cached_units:
             return self._cached_units[course_id]
 
@@ -186,9 +250,9 @@ class PESUClient:
         }
         try:
             url = f"{BASE_URL}/s/studentProfilePESUAdmin"
-            response = self.session.get(url, params=params)
+            response = self.session.get(url, params=params, timeout=10)
             if response.status_code != 200:
-                print(f"Failed to fetch units for course {course_id}: status {response.status_code}")
+                logger.warning(f"Failed to fetch units for course {course_id}: status {response.status_code}")
                 return []
 
             soup = BeautifulSoup(response.text, "html.parser")
@@ -197,7 +261,7 @@ class PESUClient:
             for a in soup.find_all("a"):
                 onclick = a.get("onclick", "")
                 if "handleclassUnit" in onclick:
-                    m = re.search(r"handleclassUnit\([\"']?(\w+)[\"']?\)", onclick)
+                    m = re.search(r"handleclassUnit\(['\"]?([a-zA-Z0-9_-]+)['\"]?\)", onclick)
                     if m:
                         unit_id = m.group(1)
                         if unit_id not in seen_unit_ids:
@@ -213,11 +277,11 @@ class PESUClient:
             self._cached_units[course_id] = units
             return units
         except Exception as e:
-            print(f"Error fetching units for course {course_id}: {e}")
+            logger.error(f"Error fetching units for course {course_id}: {e}")
             return []
 
     def get_classes(self, unit_id):
-        unit_id = str(unit_id).strip().replace('\\', '').replace('"', '').replace("'", '')
+        unit_id = str(unit_id).strip().replace("\\", "").replace('"', '').replace("'", '')
         if unit_id in self._cached_classes:
             return self._cached_classes[unit_id]
 
@@ -228,9 +292,9 @@ class PESUClient:
         }
         try:
             url = f"{BASE_URL}/s/studentProfilePESUAdmin"
-            response = self.session.get(url, params=params)
+            response = self.session.get(url, params=params, timeout=10)
             if response.status_code != 200:
-                print(f"Failed to fetch classes for unit {unit_id}: status {response.status_code}")
+                logger.warning(f"Failed to fetch classes for unit {unit_id}: status {response.status_code}")
                 return []
 
             soup = BeautifulSoup(response.text, "html.parser")
@@ -312,7 +376,7 @@ class PESUClient:
             self._cached_classes[unit_id] = classes
             return classes
         except Exception as e:
-            print(f"Error fetching classes for unit {unit_id}: {e}")
+            logger.error(f"Error fetching classes for unit {unit_id}: {e}")
             return []
 
     def download_file(self, course_id, class_id, output_path, resource_type="2"):
@@ -328,13 +392,13 @@ class PESUClient:
         
         try:
             os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-            response = self.session.get(url, params=params, stream=True)
+            response = self.session.get(url, params=params, stream=True, timeout=30)
             content_type = response.headers.get('Content-Type', '')
 
             def extract_filename(cd_header):
                 if not cd_header:
                     return None
-                m = re.search(r'''filename\*=UTF-8''([^;]+)|filename=["']?([^"';]+)["']?''', cd_header, re.I)
+                m = re.search(r'''filename\*=UTF-8''([^\;]+)|filename=["']?([^"';]+)["']?''', cd_header, re.I)
                 if m:
                     fn = m.group(1) or m.group(2)
                     clean_fn = os.path.basename(unquote(fn).strip().replace('\\', '/'))
@@ -372,7 +436,7 @@ class PESUClient:
                     
                     url_to_add = None
                     if 'downloadslidecoursedoc' in onclick:
-                        match = re.search(r"loadIframe\('([^']+)'", onclick)
+                        match = re.search(r"loadIframe\(['\"]([^'\"]+)", onclick)
                         if match:
                             url_to_add = match.group(1)
                     elif 'downloadslidecoursedoc' in href:
@@ -385,7 +449,7 @@ class PESUClient:
                             doc_id = match.group(1)
                             url_to_add = f"/Academy/a/referenceMeterials/downloadslidecoursedoc/{doc_id}"
                     elif 'downloadcoursedoc' in href:
-                        match = re.search(r"downloadcoursedoc/([a-zA-Z0-9_-]+)", href)
+                        match = re.search(r"downloadcoursedoc\(['\"]([^'\"]+)['\"]\)", href)
                         if match:
                             doc_id = match.group(1)
                             url_to_add = f"/Academy/a/referenceMeterials/downloadslidecoursedoc/{doc_id}"
@@ -405,7 +469,7 @@ class PESUClient:
                         else:
                             full_url = f"{BASE_URL}/{download_url.lstrip('/')}"
                             
-                        file_response = self.session.get(full_url, stream=True)
+                        file_response = self.session.get(full_url, stream=True, timeout=30)
                         if file_response.status_code == 200:
                             base_path = output_path if len(download_urls) == 1 else f"{output_path}_{i}"
                             fn = extract_filename(file_response.headers.get('Content-Disposition'))
@@ -424,18 +488,15 @@ class PESUClient:
                     if downloaded_paths:
                         return True, downloaded_paths
                     else:
-                        print(f"Failed to download valid files from URLs: {download_urls}")
+                        logger.warning(f"Failed to download valid files from URLs: {download_urls}")
                         return False, []
                 else:
-                    print(f"No download link found for class {class_id}")
+                    logger.warning(f"No download link found for class {class_id}")
                     return False, []
             else:
-                print(f"Unknown content type: {content_type}")
+                logger.warning(f"Unknown content type: {content_type}")
                 return False, []
 
         except Exception as e:
-            print(f"Download error: {e}")
+            logger.error(f"Download error for class {class_id}: {e}")
             return False, []
-
-
-

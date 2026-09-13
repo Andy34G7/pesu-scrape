@@ -2,7 +2,7 @@
 FROM node:20-slim AS frontend-builder
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
-RUN npm install
+RUN npm install --no-audit --no-fund
 COPY frontend/ .
 RUN npm run build
 
@@ -32,8 +32,12 @@ COPY backend/ .
 # The Flask app is configured to serve static files from 'static'
 COPY --from=frontend-builder /app/frontend/dist ./static
 
+# Set environment variables for Spire document processing
+ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+ENV PYTHONUNBUFFERED=1
+
 # Expose port
 EXPOSE 5000
 
-# Run with Gunicorn, using threads and a longer timeout for lengthy downloads/conversions
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--timeout", "120", "--workers", "1", "--threads", "4", "app:app"]
+# Run with Gunicorn, supporting Render's dynamic $PORT with fallback to 5000
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-5000} --timeout 120 --workers 1 --threads 4 app:app"]
