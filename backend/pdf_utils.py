@@ -100,31 +100,93 @@ def convert_pptx_to_pdf(pptx_path, pdf_path):
         return False
 
 
+def detect_file_type(file_path):
+    """
+    Detect file format based on magic bytes / file signatures.
+    Returns extension with dot (e.g. '.pdf', '.docx', '.pptx', '.png', '.jpg', '.doc').
+    """
+    if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+        return ""
+    try:
+        with open(file_path, "rb") as f:
+            header = f.read(32)
+        if header.startswith(b"%PDF"):
+            return ".pdf"
+        if header.startswith(b"\xff\xd8\xff"):
+            return ".jpg"
+        if header.startswith(b"\x89PNG\r\n\x1a\n"):
+            return ".png"
+        if header.startswith(b"GIF8"):
+            return ".gif"
+        if header.startswith(b"PK\x03\x04"):
+            import zipfile
+            try:
+                with zipfile.ZipFile(file_path, "r") as z:
+                    names = z.namelist()
+                    if any(n.startswith("word/") for n in names):
+                        return ".docx"
+                    if any(n.startswith("ppt/") for n in names):
+                        return ".pptx"
+                    if any(n.startswith("xl/") for n in names):
+                        return ".xlsx"
+            except Exception:
+                return ".zip"
+        if header.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"):
+            return ".doc"
+    except Exception as e:
+        logger.warning(f"Error inspecting magic bytes for {file_path}: {e}")
+    return ""
+
+
 def convert_docx_to_pdf(docx_path, pdf_path):
     try:
+        # If the file doesn't end with .docx, create a temporary copy with .docx extension so Spire doesn't reject it
+        actual_input_path = docx_path
+        created_temp = False
+        if not docx_path.lower().endswith(".docx") and not docx_path.lower().endswith(".doc"):
+            actual_input_path = docx_path + ".docx"
+            import shutil
+            shutil.copyfile(docx_path, actual_input_path)
+            created_temp = True
+
         from spire.doc import Document, FileFormat as DocFileFormat
         doc = Document()
-        doc.LoadFromFile(docx_path)
+        doc.LoadFromFile(actual_input_path)
         doc.SaveToFile(pdf_path, DocFileFormat.PDF)
         doc.Dispose()
-        return True
+
+        if created_temp and os.path.exists(actual_input_path):
+            os.remove(actual_input_path)
+
+        return os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0
     except Exception as e:
         logger.error(f"Error converting DOCX {docx_path} to PDF: {e}")
         return False
 
 
 def convert_to_pdf(source_path, pdf_path):
+    if not os.path.exists(source_path) or os.path.getsize(source_path) == 0:
+        return False
+
     ext = os.path.splitext(source_path)[1].lower()
-    if ext in ['.png', '.jpg', '.jpeg']:
+    if not ext or ext not in ['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.ppt', '.pptx', '.doc', '.docx']:
+        detected = detect_file_type(source_path)
+        if detected:
+            ext = detected
+
+    if ext == '.pdf':
+        if os.path.abspath(source_path) != os.path.abspath(pdf_path):
+            import shutil
+            shutil.copyfile(source_path, pdf_path)
+        return True
+    elif ext in ['.png', '.jpg', '.jpeg', '.gif']:
         return convert_image_to_pdf(source_path, pdf_path)
     elif ext in ['.ppt', '.pptx']:
         return convert_pptx_to_pdf(source_path, pdf_path)
     elif ext in ['.doc', '.docx']:
         return convert_docx_to_pdf(source_path, pdf_path)
-    elif ext == '.pdf':
-        return True
     else:
-        logger.warning(f"Unsupported format for PDF conversion: {ext}")
+        logger.warning(f"Unsupported format for PDF conversion: {ext} (file: {source_path})")
         return False
 
 

@@ -594,6 +594,8 @@ class PESUClient:
                     return clean_fn if clean_fn else None
                 return None
 
+            from pdf_utils import detect_file_type
+
             if any(mime in content_type for mime in [
                 'application/pdf',
                 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
@@ -612,13 +614,22 @@ class PESUClient:
                 with open(final_output_path, 'wb') as f:
                     for chunk in response.iter_content(chunk_size=8192):
                         f.write(chunk)
+
+                # Ensure proper extension if missing
+                if not os.path.splitext(final_output_path)[1]:
+                    detected_ext = detect_file_type(final_output_path)
+                    if detected_ext:
+                        new_path = f"{final_output_path}{detected_ext}"
+                        os.rename(final_output_path, new_path)
+                        final_output_path = new_path
+
                 return True, [final_output_path]
             
             elif 'text/html' in content_type:
                 soup = BeautifulSoup(response.text, "html.parser")
                 download_urls = []
                 
-                for link in soup.find_all(['a', 'div', 'span', 'i', 'p', 'iframe', 'embed']):
+                for link in soup.find_all(['a', 'div', 'span', 'i', 'p', 'iframe', 'embed', 'button', 'li']):
                     onclick = link.get('onclick', '')
                     href = link.get('href', '')
                     src = link.get('src', '')
@@ -632,16 +643,28 @@ class PESUClient:
                         url_to_add = href
                     elif 'downloadslidecoursedoc' in src:
                         url_to_add = src
-                    elif 'downloadcoursedoc' in onclick:
-                        match = re.search(r"downloadcoursedoc\(['\"]([^'\"]+)['\"]\)", onclick)
+                    elif 'downloadcoursedoc' in onclick or 'downloadcoursedocforstudent' in onclick:
+                        match = re.search(r"downloadcoursedoc(?:forstudent)?\(['\"]([^'\"]+)['\"]\)", onclick)
                         if match:
                             doc_id = match.group(1)
-                            url_to_add = f"/Academy/a/referenceMeterials/downloadslidecoursedoc/{doc_id}"
-                    elif 'downloadcoursedoc' in href:
-                        match = re.search(r"downloadcoursedoc\(['\"]([^'\"]+)['\"]\)", href)
+                            url_to_add = f"/Academy/s/referenceMeterials/downloadcoursedoc/{doc_id}"
+                    elif 'downloadcoursedoc' in href or 'downloadcoursedocforstudent' in href:
+                        match = re.search(r"downloadcoursedoc(?:forstudent)?\(['\"]([^'\"]+)['\"]\)", href)
                         if match:
                             doc_id = match.group(1)
-                            url_to_add = f"/Academy/a/referenceMeterials/downloadslidecoursedoc/{doc_id}"
+                            url_to_add = f"/Academy/s/referenceMeterials/downloadcoursedoc/{doc_id}"
+                    elif 'handleDownloadReadingMaterial' in onclick:
+                        match = re.search(r"handleDownloadReadingMaterial\(['\"]([^'\"]+)['\"]\)", onclick)
+                        if match:
+                            url_to_add = f"/Academy/s/studentProfilePESUAdmin/material/{match.group(1)}"
+                    elif 'handleDownloadCourseInfo' in onclick:
+                        match = re.search(r"handleDownloadCourseInfo\(['\"]([^'\"]+)['\"]\)", onclick)
+                        if match:
+                            url_to_add = f"/Academy/s/studentProfilePESUAdmin/courseinfo/{match.group(1)}"
+                    elif href and href.startswith('http') and not href.startswith('javascript:'):
+                        url_to_add = href
+                    elif src and src.startswith('http'):
+                        url_to_add = src
                     
                     if url_to_add:
                         url_to_add = url_to_add.split('#')[0]
@@ -671,6 +694,15 @@ class PESUClient:
                             with open(current_output_path, 'wb') as f:
                                 for chunk in file_response.iter_content(chunk_size=8192):
                                     f.write(chunk)
+
+                            # Auto-detect extension from magic bytes if not present
+                            if not os.path.splitext(current_output_path)[1]:
+                                detected_ext = detect_file_type(current_output_path)
+                                if detected_ext:
+                                    new_path = f"{current_output_path}{detected_ext}"
+                                    os.rename(current_output_path, new_path)
+                                    current_output_path = new_path
+
                             if os.path.exists(current_output_path) and os.path.getsize(current_output_path) > 0:
                                 downloaded_paths.append(current_output_path)
                     
