@@ -20,7 +20,7 @@ function Dashboard() {
     const [downloading, setDownloading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [sortOrder, setSortOrder] = useState('asc');
-    const [resourceType, setResourceType] = useState('2'); // '2' for Slides, '3' for Notes, '8' for MCQs
+    const [resourceType, setResourceType] = useState('2'); // '2' for Slides, '3' for Notes, '6' for QB, '7' for QA, '8' for MCQs
     const [isCmdOpen, setIsCmdOpen] = useState(false);
     const [isMcqModalOpen, setIsMcqModalOpen] = useState(false);
     const [activeMcqClass, setActiveMcqClass] = useState(null);
@@ -227,21 +227,24 @@ function Dashboard() {
             return;
         }
 
+        const resourceLabels = { '2': 'Slides', '3': 'Notes', '6': 'QB', '7': 'QA', '8': 'MCQs' };
+        const resLabel = resourceLabels[resourceType] || 'Files';
+
         const availableClasses = classes.filter(cls => {
-            if (resourceType === '3') {
-                return cls.hasNotes !== false;
-            } else {
-                return cls.hasSlides !== false;
-            }
+            if (resourceType === '3') return cls.hasNotes !== false;
+            if (resourceType === '6') return cls.hasQB !== false;
+            if (resourceType === '7') return cls.hasQA !== false;
+            if (resourceType === '8') return cls.hasMCQs !== false;
+            return cls.hasSlides !== false;
         });
 
         if (availableClasses.length === 0) {
-            toast.error(`No ${resourceType === '3' ? 'notes' : 'slides'} available in this unit.`);
+            toast.error(`No ${resLabel.toLowerCase()} available in this unit.`);
             return;
         }
 
         setDownloading(true);
-        const toastId = toast.loading(`Preparing ${resourceType === '2' ? 'Slides' : 'Notes'} download...`);
+        const toastId = toast.loading(`Preparing ${resLabel} download...`);
 
         try {
             const files = availableClasses.map(cls => ({
@@ -268,7 +271,7 @@ function Dashboard() {
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `${selectedCourse.subjectName}_${selectedUnit.title}_${resourceType === '2' ? 'Slides' : 'Notes'}.pdf`;
+                a.download = `${selectedCourse.subjectName}_${selectedUnit.title}_${resLabel}.pdf`;
                 document.body.appendChild(a);
                 a.click();
                 window.URL.revokeObjectURL(url);
@@ -339,7 +342,9 @@ function Dashboard() {
             return;
         }
 
-        const toastId = toast.loading(`Downloading ${cls.title}...`);
+        const resLabels = { '2': 'Slides', '3': 'Notes', '6': 'QB', '7': 'QA', '8': 'MCQs' };
+        const resLabel = resLabels[resourceType] || 'File';
+        const toastId = toast.loading(`Downloading ${resLabel} for ${cls.title}...`);
         const files = [{
             classId: cls.classId,
             name: cls.title
@@ -365,7 +370,7 @@ function Dashboard() {
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `${cls.title}.pdf`;
+                a.download = `${cls.title}_${resLabel}.pdf`;
                 document.body.appendChild(a);
                 a.click();
                 window.URL.revokeObjectURL(url);
@@ -486,25 +491,31 @@ function Dashboard() {
                                 <div className="resource-toggle">
                                     <button
                                         className={`toggle-btn ${resourceType === '2' ? 'active' : ''}`}
-                                        onClick={() => {
-                                            setResourceType('2');
-                                        }}
+                                        onClick={() => setResourceType('2')}
                                     >
                                         Slides
                                     </button>
                                     <button
                                         className={`toggle-btn ${resourceType === '3' ? 'active' : ''}`}
-                                        onClick={() => {
-                                            setResourceType('3');
-                                        }}
+                                        onClick={() => setResourceType('3')}
                                     >
                                         Notes
                                     </button>
                                     <button
+                                        className={`toggle-btn ${resourceType === '6' ? 'active' : ''}`}
+                                        onClick={() => setResourceType('6')}
+                                    >
+                                        QB
+                                    </button>
+                                    <button
+                                        className={`toggle-btn ${resourceType === '7' ? 'active' : ''}`}
+                                        onClick={() => setResourceType('7')}
+                                    >
+                                        QA
+                                    </button>
+                                    <button
                                         className={`toggle-btn ${resourceType === '8' ? 'active' : ''}`}
-                                        onClick={() => {
-                                            setResourceType('8');
-                                        }}
+                                        onClick={() => setResourceType('8')}
                                     >
                                         MCQs
                                     </button>

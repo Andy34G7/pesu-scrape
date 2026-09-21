@@ -96,6 +96,31 @@ async def test_mcp_server():
     assert isinstance(unit_mcqs_data, dict) and "totalQuestions" in unit_mcqs_data
     print(f"[PASS] pesu_get_unit_mcqs({course_id}, {unit_id}) -> {unit_mcqs_data.get('totalQuestions', 0)} total questions across {len(unit_mcqs_data.get('classes', []))} classes")
 
+    # 9. Test pesu_download_class and pesu_download_unit with QB and QA (using Data Analytics)
+    da_search = await mcp.call_tool("pesu_search_courses", {"query": "Data Analytics"})
+    da_matches = extract_tool_result(da_search)
+    if da_matches:
+        da_id = da_matches[0]["id"]
+        da_units_res = await mcp.call_tool("pesu_get_units", {"course_id": da_id})
+        da_units = extract_tool_result(da_units_res)
+        if da_units:
+            da_unit_id = da_units[0]["unitId"]
+            da_classes_res = await mcp.call_tool("pesu_get_classes", {"unit_id": da_unit_id})
+            da_classes = extract_tool_result(da_classes_res)
+            # Find class with QA
+            qa_class = next((c for c in da_classes if c.get("hasQA")), None)
+            if qa_class:
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    qa_dl = await mcp.call_tool("pesu_download_class", {
+                        "course_id": da_id,
+                        "class_id": qa_class["classId"],
+                        "resource_type": "qa",
+                        "output_dir": tmpdir
+                    })
+                    qa_res = extract_tool_result(qa_dl)
+                    assert qa_res.get("success") is True, f"QA download failed: {qa_res}"
+                    print(f"[PASS] pesu_download_class(QA) -> downloaded {len(qa_res.get('files', []))} file(s): {qa_res.get('files')}")
+
     print("\nALL 10 MCP SERVER TOOLS AND TESTS PASSED PERFECTLY!")
 
 

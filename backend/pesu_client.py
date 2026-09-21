@@ -316,6 +316,8 @@ class PESUClient:
                         col_indices["mcqs"] = idx
                     elif th_id == "6" or "qb" in th_text or "question bank" in th_text:
                         col_indices["qb"] = idx
+                    elif th_id == "7" or "qa" in th_text or "question answer" in th_text or "question and answer" in th_text:
+                        col_indices["qa"] = idx
                     elif th_id == "5" or "assignment" in th_text:
                         col_indices["assignments"] = idx
 
@@ -349,9 +351,13 @@ class PESUClient:
                 has_slides = False
                 has_notes = False
                 has_mcqs = False
+                has_qb = False
+                has_qa = False
                 slides_count = 0
                 notes_count = 0
                 mcqs_count = 0
+                qb_count = 0
+                qa_count = 0
 
                 if "slides" in col_indices and col_indices["slides"] < len(tds):
                     slides_td = tds[col_indices["slides"]]
@@ -380,6 +386,24 @@ class PESUClient:
                     except Exception:
                         mcqs_count = 1 if has_mcqs else 0
 
+                if "qb" in col_indices and col_indices["qb"] < len(tds):
+                    qb_td = tds[col_indices["qb"]]
+                    qbtext = qb_td.get_text(strip=True).replace("*", "")
+                    has_qb = qb_td.find("a") is not None or (qbtext != "-" and qbtext != "")
+                    try:
+                        qb_count = int(qbtext) if qbtext.isdigit() else (1 if has_qb else 0)
+                    except Exception:
+                        qb_count = 1 if has_qb else 0
+
+                if "qa" in col_indices and col_indices["qa"] < len(tds):
+                    qa_td = tds[col_indices["qa"]]
+                    qatext = qa_td.get_text(strip=True).replace("*", "")
+                    has_qa = qa_td.find("a") is not None or (qatext != "-" and qatext != "")
+                    try:
+                        qa_count = int(qatext) if qatext.isdigit() else (1 if has_qa else 0)
+                    except Exception:
+                        qa_count = 1 if has_qa else 0
+
                 classes.append({
                     "classId": class_id,
                     "title": clean_title,
@@ -387,9 +411,13 @@ class PESUClient:
                     "hasSlides": has_slides,
                     "hasNotes": has_notes,
                     "hasMCQs": has_mcqs,
+                    "hasQB": has_qb,
+                    "hasQA": has_qa,
                     "slidesCount": slides_count,
                     "notesCount": notes_count,
-                    "mcqsCount": mcqs_count
+                    "mcqsCount": mcqs_count,
+                    "qbCount": qb_count,
+                    "qaCount": qa_count
                 })
 
             self._cached_classes[unit_id] = classes

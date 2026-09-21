@@ -152,14 +152,18 @@ def pesu_get_classes(unit_id: str) -> List[Dict[str, Any]]:
     """
     List all classes / topics in a unit (e.g. '69624').
     Returns a list of class objects containing:
-      - 'classId': unique ID for downloading slides/notes or fetching MCQs
+      - 'classId': unique ID for downloading slides/notes/QB/QA or fetching MCQs
       - 'title': topic/class name
       - 'hasSlides': boolean indicating whether slide decks are uploaded
       - 'hasNotes': boolean indicating whether notes documents are uploaded
       - 'hasMCQs': boolean indicating whether MCQs are available
+      - 'hasQB': boolean indicating whether Question Bank is uploaded
+      - 'hasQA': boolean indicating whether Question Answers are uploaded
       - 'slidesCount': number of slide files uploaded
       - 'notesCount': number of note files uploaded
       - 'mcqsCount': number of MCQ sets available
+      - 'qbCount': number of QB files uploaded
+      - 'qaCount': number of QA files uploaded
     """
     auth_ok, auth_msg = _ensure_authenticated()
     if not auth_ok:
@@ -206,6 +210,19 @@ def pesu_get_unit_mcqs(course_id: str, unit_id: str) -> Dict[str, Any]:
     return unit_mcqs
 
 
+def _normalize_resource_type(resource_type: str) -> tuple[str, str]:
+    rt_str = str(resource_type).strip().lower()
+    rt_map = {
+        "2": "2", "slides": "2", "slide": "2",
+        "3": "3", "notes": "3", "note": "3",
+        "6": "6", "qb": "6", "question bank": "6", "question_bank": "6",
+        "7": "7", "qa": "7", "question answer": "7", "question_answer": "7", "question answers": "7"
+    }
+    rt = rt_map.get(rt_str, "2")
+    rt_name_map = {"2": "slides", "3": "notes", "6": "QB", "7": "QA"}
+    return rt, rt_name_map.get(rt, "materials")
+
+
 @mcp.tool()
 def pesu_download_class(
     course_id: str,
@@ -215,11 +232,11 @@ def pesu_download_class(
     convert_pdf: bool = True
 ) -> Dict[str, Any]:
     """
-    Download materials for a single class (slides or notes).
+    Download materials for a single class (slides, notes, Question Bank [QB], or Question Answers [QA]).
     Args:
       - course_id: Course ID (e.g. '22902')
       - class_id: Class ID (e.g. '3f0ce449-ec4d-449a-a113-f9233218bbb5')
-      - resource_type: 'slides' (or '2') for presentation slides, 'notes' (or '3') for notes/documents
+      - resource_type: 'slides' (or '2'), 'notes' (or '3'), 'qb' (or '6'), 'qa' (or '7')
       - output_dir: Optional directory to store downloads. Defaults to ~/Downloads/pesu_materials.
       - convert_pdf: Convert PPTX/DOCX/image files to PDF automatically (default: True).
     Returns:
@@ -229,8 +246,7 @@ def pesu_download_class(
     if not auth_ok:
         raise RuntimeError(auth_msg)
 
-    rt = "3" if str(resource_type).strip().lower() in ["3", "notes", "note"] else "2"
-    rt_name = "notes" if rt == "3" else "slides"
+    rt, rt_name = _normalize_resource_type(resource_type)
 
     target_dir = output_dir or os.path.expanduser("~/Downloads/pesu_materials")
     os.makedirs(target_dir, exist_ok=True)
@@ -271,11 +287,11 @@ def pesu_download_unit(
 ) -> Dict[str, Any]:
     """
     Download all available materials in an entire unit and optionally merge them into
-    a single consolidated PDF (e.g. Unit 1 Slides Book).
+    a single consolidated PDF (e.g. Unit 1 Slides Book, Unit 1 QB, or Unit 1 QA).
     Args:
       - course_id: Course ID (e.g. '22902')
       - unit_id: Unit ID (e.g. '69624')
-      - resource_type: 'slides' (or '2') for slides, 'notes' (or '3') for notes
+      - resource_type: 'slides' (or '2'), 'notes' (or '3'), 'qb' (or '6'), 'qa' (or '7')
       - merge_pdf: When True, merges all converted PDFs into one unified PDF (default: True).
       - output_dir: Optional destination directory (defaults to ~/Downloads/pesu_materials).
     Returns:
@@ -285,17 +301,23 @@ def pesu_download_unit(
     if not auth_ok:
         raise RuntimeError(auth_msg)
 
-    rt = "3" if str(resource_type).strip().lower() in ["3", "notes", "note"] else "2"
-    rt_name = "notes" if rt == "3" else "slides"
+    rt, rt_name = _normalize_resource_type(resource_type)
 
     classes = _client.get_classes(unit_id)
     if not classes:
         return {"success": False, "message": f"No classes found for unit {unit_id}."}
 
-    eligible = [
-        cls for cls in classes
-        if (cls.get("hasNotes") if rt == "3" else cls.get("hasSlides"))
-    ]
+    def check_eligible(cls):
+        if rt == "3":
+            return cls.get("hasNotes")
+        elif rt == "6":
+            return cls.get("hasQB")
+        elif rt == "7":
+            return cls.get("hasQA")
+        else:
+            return cls.get("hasSlides")
+
+    eligible = [cls for cls in classes if check_eligible(cls)]
 
     if not eligible:
         return {

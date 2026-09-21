@@ -1,17 +1,34 @@
 import React from 'react';
-import { Download, BookOpen, FileQuestion } from 'lucide-react';
+import { Download, BookOpen } from 'lucide-react';
 
 function FileList({ files, loading, downloading, onDownloadAll, onDownloadSingle, onViewMcqs, resourceType }) {
     const isMcqMode = resourceType === '8';
     const isNotesMode = resourceType === '3';
-    const resourceName = isMcqMode ? 'MCQs' : (isNotesMode ? 'notes' : 'slides');
+    const isQbMode = resourceType === '6';
+    const isQaMode = resourceType === '7';
+
+    const resourceNames = {
+        '2': 'slides',
+        '3': 'notes',
+        '6': 'QB',
+        '7': 'QA',
+        '8': 'MCQs'
+    };
+
+    const sectionTitles = {
+        '2': 'Files (Slides)',
+        '3': 'Files (Notes)',
+        '6': 'Question Bank (QB)',
+        '7': 'Question Answers (QA)',
+        '8': 'MCQs & Quizzes'
+    };
+
+    const resourceName = resourceNames[resourceType] || 'materials';
 
     return (
         <div className="classes-section">
             <div className="section-header">
-                <h3>
-                    {isMcqMode ? 'MCQs & Quizzes' : `Files (${isNotesMode ? 'Notes' : 'Slides'})`}
-                </h3>
+                <h3>{sectionTitles[resourceType] || 'Files'}</h3>
                 <button
                     className="download-btn"
                     onClick={onDownloadAll}
@@ -29,7 +46,7 @@ function FileList({ files, loading, downloading, onDownloadAll, onDownloadSingle
 
             {loading ? (
                 <div className="loading">
-                    {isMcqMode ? 'Loading MCQs & topics...' : 'Loading files...'}
+                    {isMcqMode ? 'Loading MCQs & topics...' : `Loading ${resourceName}...`}
                 </div>
             ) : files.length > 0 ? (
                 <ul className="file-list">
@@ -39,15 +56,25 @@ function FileList({ files, loading, downloading, onDownloadAll, onDownloadSingle
                             isUnavailable = cls.hasMCQs === false;
                         } else if (isNotesMode) {
                             isUnavailable = cls.hasNotes === false;
+                        } else if (isQbMode) {
+                            isUnavailable = cls.hasQB === false;
+                        } else if (isQaMode) {
+                            isUnavailable = cls.hasQA === false;
                         } else {
                             isUnavailable = cls.hasSlides === false;
                         }
 
+                        const getIcon = () => {
+                            if (isUnavailable) return '⚠️';
+                            if (isMcqMode) return '📝';
+                            if (isQbMode) return '📚';
+                            if (isQaMode) return '📑';
+                            return '📄';
+                        };
+
                         return (
                             <li key={cls.classId} className={`file-item ${isUnavailable ? 'opacity-60' : ''}`}>
-                                <span className="file-icon">
-                                    {isUnavailable ? '⚠️' : isMcqMode ? '📝' : '📄'}
-                                </span>
+                                <span className="file-icon">{getIcon()}</span>
                                 <span className="file-name" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                     {cls.title || `Topic ${cls.classId}`}
                                     {isUnavailable && (
@@ -76,7 +103,7 @@ function FileList({ files, loading, downloading, onDownloadAll, onDownloadSingle
                                                 ? `No ${resourceName} uploaded for this class`
                                                 : isMcqMode
                                                 ? "Download MCQs (.md)"
-                                                : "Download Single File"
+                                                : `Download Single ${resourceName}`
                                         }
                                         disabled={downloading || isUnavailable}
                                         style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}

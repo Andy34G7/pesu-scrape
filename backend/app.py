@@ -253,7 +253,8 @@ def download_merged():
             
     if not downloaded_pdfs:
         shutil.rmtree(temp_dir, ignore_errors=True)
-        res_label = "notes" if str(resource_type) == "3" else "slides"
+        res_labels = {"2": "slides", "3": "notes", "6": "Question Bank", "7": "Question Answers"}
+        res_label = res_labels.get(str(resource_type), "materials")
         return jsonify({"error": f"No {res_label} found or available to download for the selected class(es)."}), 404
         
     import re
