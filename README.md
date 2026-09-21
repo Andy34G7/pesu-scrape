@@ -54,15 +54,15 @@ This repository includes a built-in MCP server that enables AI assistants (Claud
 - `pesu_get_courses`: List enrolled courses across semesters.
 - `pesu_search_courses`: Search courses by course name or code.
 - `pesu_get_units`: List syllabus units for a course.
-- `pesu_get_classes`: List classes/lectures with slide, note, and MCQ availability indicators.
+- `pesu_get_classes`: List classes/lectures with slide, note, QB, QA, and MCQ availability indicators.
 - `pesu_get_mcqs`: Fetch structured Multiple Choice Questions (MCQs) and answer keys for a specific class.
 - `pesu_get_unit_mcqs`: Fetch all MCQs across all classes in an entire syllabus unit.
-- `pesu_download_class`: Download slides or notes for a single class (with automatic PDF conversion).
-- `pesu_download_unit`: Download and optionally merge all slides or notes for a unit into a consolidated PDF.
+- `pesu_download_class`: Download slides, notes, QB (Question Bank), or QA (Question Answers) for a single class (with automatic PDF conversion).
+- `pesu_download_unit`: Download and optionally merge all slides, notes, QB, or QA documents for an entire unit into a consolidated PDF.
 
 ### Running the MCP Server
 ```bash
-./backend/venv/bin/python mcp_server.py
+./backend/venv/bin/python backend/mcp_server.py
 ```
 
 ### Testing the MCP Server
@@ -76,7 +76,7 @@ This repository includes a built-in MCP server that enables AI assistants (Claud
   "mcpServers": {
     "pesu-academy": {
       "command": "/path/to/pesu-scrape/backend/venv/bin/python",
-      "args": ["/path/to/pesu-scrape/mcp_server.py"],
+      "args": ["/path/to/pesu-scrape/backend/mcp_server.py"],
       "env": {
         "DOTNET_SYSTEM_GLOBALIZATION_INVARIANT": "1"
       }
