@@ -4,6 +4,7 @@ import { Menu, X, Sun, Moon } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import UnitGrid from './components/UnitGrid';
 import FileList from './components/FileList';
+import McqModal from './components/McqModal';
 import './Dashboard.css';
 import CommandPalette from './components/CommandPalette';
 
@@ -19,8 +20,12 @@ function Dashboard() {
     const [downloading, setDownloading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [sortOrder, setSortOrder] = useState('asc');
-    const [resourceType, setResourceType] = useState('2'); // '2' for Slides, '3' for Notes
+    const [resourceType, setResourceType] = useState('2'); // '2' for Slides, '3' for Notes, '8' for MCQs
     const [isCmdOpen, setIsCmdOpen] = useState(false);
+    const [isMcqModalOpen, setIsMcqModalOpen] = useState(false);
+    const [activeMcqClass, setActiveMcqClass] = useState(null);
+    const [currentMcqData, setCurrentMcqData] = useState(null);
+    const [mcqLoading, setMcqLoading] = useState(false);
     const [favorites, setFavorites] = useState(() => {
         const saved = localStorage.getItem('pesu_favorites');
         return saved ? JSON.parse(saved) : [];
@@ -168,6 +173,60 @@ function Dashboard() {
     const handleDownload = async () => {
         if (!selectedCourse || !selectedUnit || classes.length === 0) return;
 
+        // Special handling for MCQs
+        if (resourceType === '8') {
+            setDownloading(true);
+            const toastId = toast.loading('Fetching all unit MCQs...');
+            try {
+                const cleanCourseId = selectedCourse.id.replace(/\\|"/g, '');
+                const cleanUnitId = selectedUnit.unitId.replace(/\\|"/g, '');
+                const response = await fetch(`/api/mcqs/unit/${cleanCourseId}/${cleanUnitId}`);
+                const data = await response.json();
+
+                if (data && data.totalQuestions > 0) {
+                    let md = `# ${selectedCourse.subjectName} — ${selectedUnit.title}\n`;
+                    md += `## Complete MCQ Question Bank & Study Guide\n`;
+                    md += `**Total Questions:** ${data.totalQuestions}\n\n`;
+                    md += `---\n\n`;
+
+                    data.classes.forEach(c => {
+                        md += `## Topic: ${c.title} (${c.count} Questions)\n\n`;
+                        c.questions.forEach((q, idx) => {
+                            md += `### ${q.serial || `${idx + 1})`} ${q.question}\n\n`;
+                            q.options.forEach((opt, optIdx) => {
+                                const letter = String.fromCharCode(65 + optIdx);
+                                const mark = opt.isCorrect ? ' **[CORRECT]**' : '';
+                                md += `- (${letter}) ${opt.option}${mark}\n`;
+                            });
+                            md += `\n`;
+                        });
+                        md += `---\n\n`;
+                    });
+
+                    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    const safeCourse = selectedCourse.subjectName.replace(/[^\w\-\.]/g, '_');
+                    const safeUnit = selectedUnit.title.replace(/[^\w\-\.]/g, '_');
+                    a.download = `${safeCourse}_${safeUnit}_MCQ_Study_Guide.md`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    a.remove();
+                    toast.success(`Downloaded ${data.totalQuestions} MCQs!`, { id: toastId });
+                } else {
+                    toast.error('No MCQs found in this unit.', { id: toastId });
+                }
+            } catch (e) {
+                console.error('Error downloading unit MCQs:', e);
+                toast.error('Failed to download unit MCQs', { id: toastId });
+            } finally {
+                setDownloading(false);
+            }
+            return;
+        }
+
         const availableClasses = classes.filter(cls => {
             if (resourceType === '3') {
                 return cls.hasNotes !== false;
@@ -234,6 +293,52 @@ function Dashboard() {
     };
 
     const handleSingleDownload = async (cls) => {
+        // Special handling for MCQs
+        if (resourceType === '8') {
+            const toastId = toast.loading(`Downloading MCQs for ${cls.title}...`);
+            try {
+                const cleanCourseId = selectedCourse.id.replace(/\\|"/g, '');
+                const cleanClassId = cls.classId.replace(/\\|"/g, '');
+                const response = await fetch(`/api/mcqs/${cleanCourseId}/${cleanClassId}`);
+                const data = await response.json();
+
+                if (data && data.count > 0) {
+                    let md = `# ${selectedCourse.subjectName} — ${cls.title} MCQs\n`;
+                    md += `**Unit:** ${selectedUnit?.title || 'Unit'}\n`;
+                    md += `**Total Questions:** ${data.count}\n\n`;
+                    md += `---\n\n`;
+
+                    data.questions.forEach((q, idx) => {
+                        md += `### ${q.serial || `${idx + 1})`} ${q.question}\n\n`;
+                        q.options.forEach((opt, optIdx) => {
+                            const letter = String.fromCharCode(65 + optIdx);
+                            const mark = opt.isCorrect ? ' **[CORRECT]**' : '';
+                            md += `- (${letter}) ${opt.option}${mark}\n`;
+                        });
+                        md += `\n`;
+                    });
+
+                    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    const safeName = (cls.title || 'MCQs').replace(/[^\w\-\.]/g, '_');
+                    a.download = `${safeName}_MCQs.md`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    a.remove();
+                    toast.success('MCQs Markdown file downloaded!', { id: toastId });
+                } else {
+                    toast.error('No MCQs found for this topic.', { id: toastId });
+                }
+            } catch (e) {
+                console.error('Single MCQ download error:', e);
+                toast.error('Failed to download MCQs', { id: toastId });
+            }
+            return;
+        }
+
         const toastId = toast.loading(`Downloading ${cls.title}...`);
         const files = [{
             classId: cls.classId,
@@ -279,6 +384,25 @@ function Dashboard() {
         } catch (error) {
             console.error('Single download error:', error);
             toast.error('Error downloading file', { id: toastId });
+        }
+    };
+
+    const handleViewMcqs = async (cls) => {
+        setActiveMcqClass(cls);
+        setIsMcqModalOpen(true);
+        setMcqLoading(true);
+        setCurrentMcqData(null);
+        try {
+            const cleanCourseId = selectedCourse.id.replace(/\\|"/g, '');
+            const cleanClassId = cls.classId.replace(/\\|"/g, '');
+            const response = await fetch(`/api/mcqs/${cleanCourseId}/${cleanClassId}`);
+            const data = await response.json();
+            setCurrentMcqData(data);
+        } catch (e) {
+            console.error('Error fetching MCQs for modal:', e);
+            toast.error('Failed to load MCQs');
+        } finally {
+            setMcqLoading(false);
         }
     };
 
@@ -363,7 +487,6 @@ function Dashboard() {
                                     <button
                                         className={`toggle-btn ${resourceType === '2' ? 'active' : ''}`}
                                         onClick={() => {
-                                            console.log('Switching to Slides (2)');
                                             setResourceType('2');
                                         }}
                                     >
@@ -372,11 +495,18 @@ function Dashboard() {
                                     <button
                                         className={`toggle-btn ${resourceType === '3' ? 'active' : ''}`}
                                         onClick={() => {
-                                            console.log('Switching to Notes (3)');
                                             setResourceType('3');
                                         }}
                                     >
                                         Notes
+                                    </button>
+                                    <button
+                                        className={`toggle-btn ${resourceType === '8' ? 'active' : ''}`}
+                                        onClick={() => {
+                                            setResourceType('8');
+                                        }}
+                                    >
+                                        MCQs
                                     </button>
                                 </div>
                             </div>
@@ -397,10 +527,21 @@ function Dashboard() {
                                     downloading={downloading}
                                     onDownloadAll={handleDownload}
                                     onDownloadSingle={handleSingleDownload}
+                                    onViewMcqs={handleViewMcqs}
                                     resourceType={resourceType}
                                 />
                             )}
                         </div>
+
+                        <McqModal
+                            isOpen={isMcqModalOpen}
+                            onClose={() => setIsMcqModalOpen(false)}
+                            course={selectedCourse}
+                            unit={selectedUnit}
+                            classItem={activeMcqClass}
+                            mcqsData={currentMcqData}
+                            loading={mcqLoading}
+                        />
                     </>
                 ) : (
                     <div className="empty-state relative h-full flex flex-col items-center justify-center">
