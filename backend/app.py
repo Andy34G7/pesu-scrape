@@ -111,6 +111,28 @@ def get_classes(unit_id):
     classes = client.get_classes(clean_unit_id)
     return jsonify(classes)
 
+@app.route('/api/mcqs/<course_id>/<class_id>', methods=['GET'])
+def get_class_mcqs(course_id, class_id):
+    client = get_authenticated_client()
+    if not client:
+        return jsonify({"error": "Unauthorized or session expired"}), 401
+    
+    clean_course_id = str(course_id).strip().replace('\\', '').replace('"', '').replace("'", '')
+    clean_class_id = str(class_id).strip().replace('\\', '').replace('"', '').replace("'", '')
+    mcqs = client.get_mcqs(clean_course_id, clean_class_id)
+    return jsonify(mcqs)
+
+@app.route('/api/mcqs/unit/<course_id>/<unit_id>', methods=['GET'])
+def get_unit_mcqs(course_id, unit_id):
+    client = get_authenticated_client()
+    if not client:
+        return jsonify({"error": "Unauthorized or session expired"}), 401
+    
+    clean_course_id = str(course_id).strip().replace('\\', '').replace('"', '').replace("'", '')
+    clean_unit_id = str(unit_id).strip().replace('\\', '').replace('"', '').replace("'", '')
+    unit_mcqs = client.get_unit_mcqs(clean_course_id, clean_unit_id)
+    return jsonify(unit_mcqs)
+
 @app.route('/api/download', methods=['POST'])
 def download_merged():
     client = get_authenticated_client()

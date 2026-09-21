@@ -312,6 +312,12 @@ class PESUClient:
                         col_indices["slides"] = idx
                     elif th_id == "3" or "note" in th_text:
                         col_indices["notes"] = idx
+                    elif th_id == "8" or "mcq" in th_text:
+                        col_indices["mcqs"] = idx
+                    elif th_id == "6" or "qb" in th_text or "question bank" in th_text:
+                        col_indices["qb"] = idx
+                    elif th_id == "5" or "assignment" in th_text:
+                        col_indices["assignments"] = idx
 
             rows = table.find("tbody").find_all("tr") if table.find("tbody") else table.find_all("tr")[1:]
             classes = []
@@ -342,8 +348,10 @@ class PESUClient:
 
                 has_slides = False
                 has_notes = False
+                has_mcqs = False
                 slides_count = 0
                 notes_count = 0
+                mcqs_count = 0
 
                 if "slides" in col_indices and col_indices["slides"] < len(tds):
                     slides_td = tds[col_indices["slides"]]
@@ -363,14 +371,25 @@ class PESUClient:
                     except Exception:
                         notes_count = 1 if has_notes else 0
 
+                if "mcqs" in col_indices and col_indices["mcqs"] < len(tds):
+                    mcqs_td = tds[col_indices["mcqs"]]
+                    mtext = mcqs_td.get_text(strip=True).replace("*", "")
+                    has_mcqs = mcqs_td.find("a") is not None or (mtext != "-" and mtext != "")
+                    try:
+                        mcqs_count = int(mtext) if mtext.isdigit() else (1 if has_mcqs else 0)
+                    except Exception:
+                        mcqs_count = 1 if has_mcqs else 0
+
                 classes.append({
                     "classId": class_id,
                     "title": clean_title,
                     "path": class_id,
                     "hasSlides": has_slides,
                     "hasNotes": has_notes,
+                    "hasMCQs": has_mcqs,
                     "slidesCount": slides_count,
-                    "notesCount": notes_count
+                    "notesCount": notes_count,
+                    "mcqsCount": mcqs_count
                 })
 
             self._cached_classes[unit_id] = classes
@@ -378,6 +397,148 @@ class PESUClient:
         except Exception as e:
             logger.error(f"Error fetching classes for unit {unit_id}: {e}")
             return []
+
+    def get_mcqs(self, course_id, class_id):
+        """
+        Fetch and parse Multiple Choice Questions (MCQs) for a specific class.
+        Endpoint: /Academy/s/studentProfilePESUAdmin with actionType=60 and id=8.
+        Returns:
+          Dict with 'courseId', 'classId', 'count', and 'questions' list.
+        """
+        course_id = str(course_id).strip().replace("\\", "").replace('"', '').replace("'", '')
+        class_id = str(class_id).strip().replace("\\", "").replace('"', '').replace("'", '')
+
+        url = f"{BASE_URL}/s/studentProfilePESUAdmin"
+        params = {
+            "url": "studentProfilePESUAdmin",
+            "controllerMode": "6403",
+            "actionType": "60",
+            "selectedData": course_id,
+            "id": "8",
+            "unitid": class_id
+        }
+        try:
+            response = self.session.get(url, params=params, timeout=15)
+            if response.status_code != 200:
+                logger.warning(f"Failed to fetch MCQs for class {class_id}: HTTP {response.status_code}")
+                return {
+                    "courseId": course_id,
+                    "classId": class_id,
+                    "count": 0,
+                    "questions": [],
+                    "message": f"HTTP {response.status_code}"
+                }
+
+            soup = BeautifulSoup(response.text, "html.parser")
+            mcq_container = soup.find(id="courseMaterialMCQs")
+            if not mcq_container or "No MCQs Content" in response.text or "No\n\t\t\t\t\t\tMCQs" in response.text:
+                return {
+                    "courseId": course_id,
+                    "classId": class_id,
+                    "count": 0,
+                    "questions": [],
+                    "message": "No MCQs available for this class"
+                }
+
+            questions = []
+            elem_sets = mcq_container.find_all("div", class_="qstn-elem-set")
+            for elem in elem_sets:
+                q_serial_el = elem.find("div", class_="qstn-serial")
+                serial_str = q_serial_el.get_text(strip=True) if q_serial_el else ""
+                q_content_el = elem.find("div", class_="qstn-content")
+                q_text = " ".join(q_content_el.get_text(strip=True).split()) if q_content_el else ""
+
+                options = []
+                curr = elem.find_next_sibling()
+                while curr and "qstn-elem-set" not in curr.get("class", []):
+                    radio = curr.find("div", class_="radio") or (curr if "radio" in curr.get("class", []) else None)
+                    if radio:
+                        inp = radio.find("input", {"type": "radio"})
+                        is_correct = False
+                        ans_id = ""
+                        q_id = ""
+                        if inp:
+                            is_correct = (inp.get("value") == "true")
+                            ans_id = inp.get("id", "").replace("ans_", "")
+                            q_id = inp.get("name", "").replace("ans_", "")
+
+                        label = radio.find("label")
+                        opt_text = ""
+                        if label:
+                            for input_tag in label.find_all("input"):
+                                input_tag.decompose()
+                            opt_text = " ".join(label.get_text(strip=True).split())
+
+                        options.append({
+                            "option": opt_text,
+                            "isCorrect": is_correct,
+                            "answerId": ans_id,
+                            "questionId": q_id
+                        })
+                    curr = curr.find_next_sibling()
+
+                if q_text:
+                    questions.append({
+                        "serial": serial_str,
+                        "question": q_text,
+                        "options": options
+                    })
+
+            return {
+                "courseId": course_id,
+                "classId": class_id,
+                "count": len(questions),
+                "questions": questions
+            }
+        except Exception as e:
+            logger.error(f"Error parsing MCQs for class {class_id}: {e}")
+            return {
+                "courseId": course_id,
+                "classId": class_id,
+                "count": 0,
+                "questions": [],
+                "error": str(e)
+            }
+
+    def get_unit_mcqs(self, course_id, unit_id):
+        """
+        Fetch all MCQs across all classes in a syllabus unit.
+        """
+        course_id = str(course_id).strip().replace("\\", "").replace('"', '').replace("'", '')
+        unit_id = str(unit_id).strip().replace("\\", "").replace('"', '').replace("'", '')
+
+        classes = self.get_classes(unit_id)
+        if not classes:
+            return {
+                "courseId": course_id,
+                "unitId": unit_id,
+                "totalQuestions": 0,
+                "classes": []
+            }
+
+        eligible_classes = [c for c in classes if c.get("hasMCQs", True)]
+
+        def fetch_class_mcqs(cls):
+            res = self.get_mcqs(course_id, cls["classId"])
+            return {
+                "classId": cls["classId"],
+                "title": cls.get("title", ""),
+                "count": res.get("count", 0),
+                "questions": res.get("questions", [])
+            }
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+            results = list(executor.map(fetch_class_mcqs, eligible_classes))
+
+        populated_classes = [r for r in results if r["count"] > 0]
+        total_q = sum(r["count"] for r in populated_classes)
+
+        return {
+            "courseId": course_id,
+            "unitId": unit_id,
+            "totalQuestions": total_q,
+            "classes": populated_classes
+        }
 
     def download_file(self, course_id, class_id, output_path, resource_type="2"):
         url = f"{BASE_URL}/s/studentProfilePESUAdmin"

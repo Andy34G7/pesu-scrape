@@ -152,12 +152,14 @@ def pesu_get_classes(unit_id: str) -> List[Dict[str, Any]]:
     """
     List all classes / topics in a unit (e.g. '69624').
     Returns a list of class objects containing:
-      - 'classId': unique ID for downloading slides/notes
+      - 'classId': unique ID for downloading slides/notes or fetching MCQs
       - 'title': topic/class name
       - 'hasSlides': boolean indicating whether slide decks are uploaded
       - 'hasNotes': boolean indicating whether notes documents are uploaded
+      - 'hasMCQs': boolean indicating whether MCQs are available
       - 'slidesCount': number of slide files uploaded
       - 'notesCount': number of note files uploaded
+      - 'mcqsCount': number of MCQ sets available
     """
     auth_ok, auth_msg = _ensure_authenticated()
     if not auth_ok:
@@ -165,6 +167,43 @@ def pesu_get_classes(unit_id: str) -> List[Dict[str, Any]]:
 
     classes = _client.get_classes(unit_id)
     return classes
+
+
+@mcp.tool()
+def pesu_get_mcqs(course_id: str, class_id: str) -> Dict[str, Any]:
+    """
+    Fetch Multiple Choice Questions (MCQs) / quiz questions for a specific class.
+    Args:
+      - course_id: Course ID (e.g. '22902')
+      - class_id: Class ID (e.g. '3f0ce449-ec4d-449a-a113-f9233218bbb5')
+    Returns:
+      Dict with 'courseId', 'classId', 'count', and 'questions' list.
+      Each question contains 'serial', 'question' text, and 'options' with 'isCorrect' indicators.
+    """
+    auth_ok, auth_msg = _ensure_authenticated()
+    if not auth_ok:
+        raise RuntimeError(auth_msg)
+
+    mcqs = _client.get_mcqs(course_id, class_id)
+    return mcqs
+
+
+@mcp.tool()
+def pesu_get_unit_mcqs(course_id: str, unit_id: str) -> Dict[str, Any]:
+    """
+    Fetch all Multiple Choice Questions (MCQs) across all classes in an entire syllabus unit.
+    Args:
+      - course_id: Course ID (e.g. '22902')
+      - unit_id: Unit ID (e.g. '69624')
+    Returns:
+      Dict with 'courseId', 'unitId', 'totalQuestions', and 'classes' (each with questions list).
+    """
+    auth_ok, auth_msg = _ensure_authenticated()
+    if not auth_ok:
+        raise RuntimeError(auth_msg)
+
+    unit_mcqs = _client.get_unit_mcqs(course_id, unit_id)
+    return unit_mcqs
 
 
 @mcp.tool()

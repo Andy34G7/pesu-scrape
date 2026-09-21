@@ -36,6 +36,8 @@ async def test_mcp_server():
         "pesu_search_courses",
         "pesu_get_units",
         "pesu_get_classes",
+        "pesu_get_mcqs",
+        "pesu_get_unit_mcqs",
         "pesu_download_class",
         "pesu_download_unit",
     ]
@@ -60,12 +62,41 @@ async def test_mcp_server():
     print(f"[PASS] pesu_get_courses -> total {len(courses)} courses available")
 
     # 5. Test pesu_search_courses
-    search_res = await mcp.call_tool("pesu_search_courses", {"query": "Data"})
+    search_res = await mcp.call_tool("pesu_search_courses", {"query": "Software Engineering"})
     matches = extract_tool_result(search_res)
-    assert isinstance(matches, list) and len(matches) > 0, "pesu_search_courses returned 0 results for 'Data'"
-    print(f"[PASS] pesu_search_courses('Data') -> found {len(matches)} match(es), first: {matches[0]['subjectName']} (ID: {matches[0]['id']})")
+    assert isinstance(matches, list) and len(matches) > 0, "pesu_search_courses returned 0 results for 'Software Engineering'"
+    course_id = matches[0]["id"]
+    print(f"[PASS] pesu_search_courses('Software Engineering') -> found ID: {course_id}")
 
-    print("\nALL MCP SERVER TESTS PASSED PERFECTLY!")
+    # 6. Test pesu_get_units and pesu_get_classes
+    units_res = await mcp.call_tool("pesu_get_units", {"course_id": course_id})
+    units = extract_tool_result(units_res)
+    assert isinstance(units, list) and len(units) > 0, "pesu_get_units returned 0 units"
+    unit_id = units[0]["unitId"]
+    print(f"[PASS] pesu_get_units({course_id}) -> {len(units)} units, first: {units[0]['title']} ({unit_id})")
+
+    classes_res = await mcp.call_tool("pesu_get_classes", {"unit_id": unit_id})
+    classes = extract_tool_result(classes_res)
+    assert isinstance(classes, list) and len(classes) > 0, "pesu_get_classes returned 0 classes"
+    class_id = classes[0]["classId"]
+    print(f"[PASS] pesu_get_classes({unit_id}) -> {len(classes)} classes, first: {classes[0]['title']} ({class_id})")
+
+    # 7. Test pesu_get_mcqs
+    mcqs_res = await mcp.call_tool("pesu_get_mcqs", {"course_id": course_id, "class_id": class_id})
+    mcqs_data = extract_tool_result(mcqs_res)
+    assert isinstance(mcqs_data, dict) and "questions" in mcqs_data, f"Invalid MCQ data structure: {mcqs_data}"
+    print(f"[PASS] pesu_get_mcqs({course_id}, {class_id}) -> {mcqs_data.get('count', 0)} questions retrieved successfully!")
+    if mcqs_data.get("questions"):
+        first_q = mcqs_data["questions"][0]
+        print(f"       Sample Question: {first_q.get('serial')} {first_q.get('question')[:60]}... ({len(first_q.get('options', []))} options)")
+
+    # 8. Test pesu_get_unit_mcqs
+    unit_mcqs_res = await mcp.call_tool("pesu_get_unit_mcqs", {"course_id": course_id, "unit_id": unit_id})
+    unit_mcqs_data = extract_tool_result(unit_mcqs_res)
+    assert isinstance(unit_mcqs_data, dict) and "totalQuestions" in unit_mcqs_data
+    print(f"[PASS] pesu_get_unit_mcqs({course_id}, {unit_id}) -> {unit_mcqs_data.get('totalQuestions', 0)} total questions across {len(unit_mcqs_data.get('classes', []))} classes")
+
+    print("\nALL 10 MCP SERVER TOOLS AND TESTS PASSED PERFECTLY!")
 
 
 if __name__ == "__main__":
