@@ -387,10 +387,37 @@ def main():
         if auth_ok:
             courses = _client.get_subjects()
             sys.stderr.write(f"Retrieved {len(courses)} courses successfully.\n")
-        sys.stderr.write("MCP Server initialized and ready for stdio transport.\n")
+        sys.stderr.write("MCP Server initialized and ready for transport.\n")
         return
 
-    mcp.run(transport="stdio")
+    import argparse
+    parser = argparse.ArgumentParser(description="PESU Academy MCP Server")
+    parser.add_argument("--test", action="store_true", help="Run test checks")
+    parser.add_argument(
+        "--transport",
+        default=os.environ.get("MCP_TRANSPORT", "stdio"),
+        choices=["stdio", "sse", "streamable-http"],
+        help="MCP transport protocol (stdio, sse, streamable-http)"
+    )
+    parser.add_argument("--host", default=os.environ.get("HOST", "0.0.0.0"), help="Host for network transports")
+    parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8000")), help="Port for network transports")
+    args, _ = parser.parse_known_args()
+
+    if args.transport == "stdio":
+        mcp.run(transport="stdio")
+    else:
+        try:
+            from mcp.server.transport_security import TransportSecuritySettings
+            sec = TransportSecuritySettings(enable_dns_rebinding_protection=False)
+        except Exception:
+            sec = None
+
+        kwargs = {"host": args.host, "port": args.port}
+        if sec is not None:
+            kwargs["transport_security"] = sec
+
+        sys.stderr.write(f"Starting PESU Academy MCP Server on {args.host}:{args.port} using {args.transport} transport...\n")
+        mcp.run(transport=args.transport, **kwargs)
 
 
 if __name__ == "__main__":
