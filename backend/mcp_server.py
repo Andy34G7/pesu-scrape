@@ -62,7 +62,7 @@ def _ensure_authenticated(username: Optional[str] = None, password: Optional[str
     pwd = password or os.environ.get("PESU_PASSWORD")
 
     if not user or not pwd:
-        return False, "Missing credentials. Provide username/password or set PESU_USERNAME and PESU_PASSWORD in .env."
+        return False, "Not authenticated. Please call pesu_login(username='...', password='...') with student credentials first, or configure PESU_USERNAME and PESU_PASSWORD in server environment variables."
 
     success, msg = _client.authenticate(user, pwd)
     if success:
