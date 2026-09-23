@@ -70,7 +70,38 @@ This repository includes a built-in MCP server that enables AI assistants (Claud
 ./backend/venv/bin/python backend/test_mcp.py
 ```
 
-### Client Configuration (`mcp_config.json` / Claude Desktop / Cursor)
+### Client Configuration
+
+#### 1. Remote / Hosted (Render via SSE)
+When hosted on Render, the server exposes the MCP SSE endpoint at `https://<your-render-app>.onrender.com/sse`:
+
+- **For Cursor / Claude Code / Cline / Roo Code / LibreChat**:
+  ```json
+  {
+    "mcpServers": {
+      "pesu-academy": {
+        "url": "https://your-render-app.onrender.com/sse"
+      }
+    }
+  }
+  ```
+- **For Claude Desktop** (using `mcp-remote` proxy):
+  ```json
+  {
+    "mcpServers": {
+      "pesu-academy": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "mcp-remote",
+          "https://your-render-app.onrender.com/sse"
+        ]
+      }
+    }
+  }
+  ```
+
+#### 2. Local (`stdio`)
 ```json
 {
   "mcpServers": {

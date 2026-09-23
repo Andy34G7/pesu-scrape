@@ -9,3 +9,5 @@ Spire.Doc
 python-pptx
 mcp>=1.0.0
 python-dotenv
+a2wsgi
+uvicorn

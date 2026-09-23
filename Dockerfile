@@ -39,5 +39,5 @@ ENV PYTHONUNBUFFERED=1
 # Expose port
 EXPOSE 5000
 
-# Run with Gunicorn, supporting Render's dynamic $PORT with fallback to 5000
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-5000} --timeout 120 --workers 1 --threads 4 app:app"]
+# Run unified ASGI server (Web UI + REST API + MCP SSE endpoint), supporting Render's dynamic $PORT
+CMD ["sh", "-c", "uvicorn asgi:app --host 0.0.0.0 --port ${PORT:-5000} --timeout-keep-alive 120"]
