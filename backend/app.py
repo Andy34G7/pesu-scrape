@@ -1,14 +1,28 @@
-from flask import Flask, jsonify, request, session
-from flask_cors import CORS
-from pesu_client import PESUClient
+from collections import OrderedDict
+import gc
+import json
 import os
-import os
+import threading
+import time
+
 # Set this BEFORE importing any library that relies on .NET (like Spire) via pdf_utils check
 os.environ['DOTNET_SYSTEM_GLOBALIZATION_INVARIANT'] = '1'
 
-import json
+from flask import Flask, jsonify, request, session
+from flask_cors import CORS
+from pesu_client import PESUClient
 
 app = Flask(__name__, static_folder='static', static_url_path='/')
+
+
+@app.after_request
+def add_cache_headers(response):
+    if request.path.startswith('/assets/'):
+        response.headers.setdefault('Cache-Control', 'public, max-age=31536000, immutable')
+    elif request.path == '/' or request.path.endswith('.html'):
+        response.headers.setdefault('Cache-Control', 'no-cache')
+    return response
+
 
 @app.route('/')
 def serve():
@@ -22,23 +36,50 @@ def not_found(e):
 app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24)) # Required for session management
 CORS(app, supports_credentials=True) # Enable CORS for all routes with credentials
 
-# Global client store (simple version for single user demo, ideally use session-based storage or redis)
-# For a multi-user web app, we shouldn't store the client globally like this.
-# Instead, we should probably re-create the session or store cookies.
-# However, since we can't easily serialize the requests.Session object, 
-# we will store a map of session_id -> PESUClient.
-clients = {}
+# Bounded in-memory session store with TTL eviction to prevent unbounded RAM growth
+# on long-lived free Render instances.
+SESSION_TTL_SECONDS = int(os.environ.get('SESSION_TTL_SECONDS', 3600))
+MAX_SESSIONS = int(os.environ.get('MAX_SESSIONS', 25))
+clients = OrderedDict()  # user_id -> (PESUClient, last_used_ts)
+_clients_lock = threading.Lock()
+
+
+def _close_client(client):
+    try:
+        client.session.close()
+    except Exception:
+        pass
+
+
+def _evict_expired_locked(now):
+    expired = [uid for uid, (_, ts) in clients.items() if now - ts > SESSION_TTL_SECONDS]
+    for uid in expired:
+        client, _ = clients.pop(uid)
+        _close_client(client)
+
 
 def get_authenticated_client():
     user_id = session.get('user_id')
-    if not user_id or user_id not in clients:
+    if not user_id:
         return None
-    client = clients[user_id]
-    if not getattr(client, 'is_authenticated', False):
-        return None
-    return client
+    now = time.monotonic()
+    with _clients_lock:
+        _evict_expired_locked(now)
+        entry = clients.get(user_id)
+        if not entry:
+            return None
+        client, _ = entry
+        if not getattr(client, 'is_authenticated', False):
+            clients.pop(user_id, None)
+            _close_client(client)
+            return None
+        clients[user_id] = (client, now)
+        clients.move_to_end(user_id)
+        return client
 
-@app.route('/api/health', methods=['GET'])
+
+@app.route('/health', methods=['GET', 'HEAD'])
+@app.route('/api/health', methods=['GET', 'HEAD'])
 def health_check():
     return jsonify({"status": "healthy", "message": "PESU Scrape Backend is running"})
 
@@ -60,10 +101,23 @@ def login():
     success, message = client.authenticate(username, password)
     
     if success:
-        clients[user_id] = client
+        now = time.monotonic()
+        with _clients_lock:
+            _evict_expired_locked(now)
+            if user_id in clients:
+                old_client, _ = clients.pop(user_id)
+                _close_client(old_client)
+            while len(clients) >= MAX_SESSIONS:
+                _, (evicted_client, _) = clients.popitem(last=False)
+                _close_client(evicted_client)
+            clients[user_id] = (client, now)
         return jsonify({"status": "success", "message": message})
     else:
-        clients.pop(user_id, None)
+        with _clients_lock:
+            entry = clients.pop(user_id, None)
+            if entry:
+                _close_client(entry[0])
+        _close_client(client)
         return jsonify({"status": "error", "message": message}), 401
 
 @app.route('/api/courses', methods=['GET'])
@@ -152,9 +206,7 @@ def download_merged():
     user_id = session['user_id']
     
     import tempfile
-    base_temp = tempfile.gettempdir()
-    temp_dir = os.path.join(base_temp, f"pesu_temp_{user_id}")
-    os.makedirs(temp_dir, exist_ok=True)
+    temp_dir = tempfile.mkdtemp(prefix=f"pesu_{user_id}_")
     
     from pdf_utils import convert_pptx_to_pdf, convert_docx_to_pdf, convert_image_to_pdf, merge_pdfs
     import concurrent.futures
@@ -206,6 +258,10 @@ def download_merged():
                         pdf_path = os.path.splitext(final_path)[0] + ".pdf"
                         if convert_image_to_pdf(final_path, pdf_path):
                             processed_pdfs.append(pdf_path)
+                        try:
+                            os.remove(final_path)
+                        except OSError:
+                            pass
                         continue
 
                     is_zip = False
@@ -228,6 +284,10 @@ def download_merged():
                                     pdf_path = os.path.splitext(pptx_path)[0] + ".pdf"
                                     if convert_pptx_to_pdf(pptx_path, pdf_path):
                                         processed_pdfs.append(pdf_path)
+                                    try:
+                                        os.remove(pptx_path)
+                                    except OSError:
+                                        pass
                                 elif any(f.startswith('word/') for f in filenames):
                                     docx_path = final_path if final_path.endswith('.docx') else final_path + ".docx"
                                     if docx_path != final_path:
@@ -235,6 +295,10 @@ def download_merged():
                                     pdf_path = os.path.splitext(docx_path)[0] + ".pdf"
                                     if convert_docx_to_pdf(docx_path, pdf_path):
                                         processed_pdfs.append(pdf_path)
+                                    try:
+                                        os.remove(docx_path)
+                                    except OSError:
+                                        pass
                                 else:
                                     print(f"Unknown zip content for {name}")
                         except Exception as e:
@@ -265,6 +329,13 @@ def download_merged():
     
     try:
         merge_pdfs(downloaded_pdfs, output_path)
+        for pdf in downloaded_pdfs:
+            if os.path.abspath(pdf) != os.path.abspath(output_path):
+                try:
+                    os.remove(pdf)
+                except OSError:
+                    pass
+        gc.collect()
         
         from flask import send_file
         response = send_file(output_path, as_attachment=True, download_name=output_filename)

@@ -3,6 +3,7 @@
 .env
 .env.*
 backend/venv/
+backend/static/
 backend/test_*.py
 frontend/node_modules/
 frontend/dist/

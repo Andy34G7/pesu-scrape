@@ -36,9 +36,13 @@ def test_api():
 
     # 1. Health check
     unauth_client = app.test_client()
-    res = unauth_client.get("/api/health")
-    assert res.status_code == 200, f"Health check failed: {res.status_code}"
-    print("[PASS] /api/health -> 200")
+    for path in ["/api/health", "/health"]:
+        res = unauth_client.get(path)
+        assert res.status_code == 200, f"Health check failed for {path}: {res.status_code}"
+        assert res.json.get("status") == "healthy", f"Unexpected health payload for {path}: {res.json}"
+        head_res = unauth_client.head(path)
+        assert head_res.status_code == 200, f"HEAD health check failed for {path}: {head_res.status_code}"
+    print("[PASS] /api/health & /health (GET + HEAD) -> 200")
 
     # 2. Unauthorized access checks
     for endpoint in ["/api/courses", "/api/units/22902", "/api/classes/69624"]:

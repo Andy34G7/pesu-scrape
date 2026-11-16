@@ -23,7 +23,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy backend requirements
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install gunicorn
 
 # Copy backend code
 COPY backend/ .
@@ -40,4 +39,4 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 5000
 
 # Run unified ASGI server (Web UI + REST API + MCP SSE endpoint), supporting Render's dynamic $PORT
-CMD ["sh", "-c", "uvicorn asgi:app --host 0.0.0.0 --port ${PORT:-5000} --timeout-keep-alive 120"]
+CMD ["sh", "-c", "uvicorn asgi:app --host 0.0.0.0 --port ${PORT:-5000} --timeout-keep-alive 60"]

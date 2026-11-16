@@ -10,6 +10,7 @@ if current_dir not in sys.path:
 os.environ.setdefault("DOTNET_SYSTEM_GLOBALIZATION_INVARIANT", "1")
 
 from a2wsgi import WSGIMiddleware
+from starlette.responses import JSONResponse
 from mcp_server import mcp
 from app import app as flask_app
 
@@ -20,6 +21,15 @@ try:
     app = mcp.sse_app(transport_security=sec)
 except Exception:
     app = mcp.sse_app()
+
+
+async def health_check(request):
+    """Lightweight async health endpoint for UptimeRobot / Render probes."""
+    return JSONResponse({"status": "healthy", "message": "PESU Scrape Backend is running"})
+
+
+# Register /health before mounting Flask so keep-alive pings bypass WSGIMiddleware
+app.add_route("/health", health_check, methods=["GET", "HEAD"])
 
 # Mount the Flask WSGI app at the root.
 # MCP SSE (/sse and /messages) takes precedence; all other paths (/, /api/*, /static/*)

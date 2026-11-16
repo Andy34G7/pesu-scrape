@@ -1,8 +1,13 @@
 import os
 import sys
 import logging
+import subprocess
+import threading
 from pypdf import PdfWriter
 import img2pdf
+
+# Serialize Spire/.NET conversion subprocesses so only one runs at a time on 512 MB instances
+_spire_lock = threading.Lock()
 
 # Ensure proper globalization for Spire library on Linux
 os.environ.setdefault("DOTNET_SYSTEM_GLOBALIZATION_INVARIANT", "1")
@@ -76,14 +81,14 @@ def repair_pptx(pptx_path):
         return False
 
 
-def convert_pptx_to_pdf(pptx_path, pdf_path):
+def _convert_pptx_in_process(pptx_path, pdf_path):
     try:
         from spire.presentation import Presentation, FileFormat
         presentation = Presentation()
         presentation.LoadFromFile(pptx_path)
         presentation.SaveToFile(pdf_path, FileFormat.PDF)
         presentation.Dispose()
-        return True
+        return os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0
     except Exception as e:
         logger.warning(f"Spire PPTX conversion failed: {e}. Retrying with repair...")
         try:
@@ -93,11 +98,45 @@ def convert_pptx_to_pdf(pptx_path, pdf_path):
                 presentation.LoadFromFile(pptx_path)
                 presentation.SaveToFile(pdf_path, FileFormat.PDF)
                 presentation.Dispose()
-                return True
+                return os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0
         except Exception as repair_e:
             logger.error(f"Repair and retry failed: {repair_e}")
-            
+
         return False
+
+
+def _run_conversion_subprocess(mode, src_path, pdf_path, timeout=120):
+    """Run Spire conversion in a short-lived subprocess so the OS reclaims all .NET CLR memory on exit."""
+    env = os.environ.copy()
+    env.setdefault("DOTNET_SYSTEM_GLOBALIZATION_INVARIANT", "1")
+    # Cap .NET GC heap at 256 MB so GC triggers aggressively inside 512 MB Render containers
+    env.setdefault("DOTNET_GCHeapHardLimit", "0x10000000")
+
+    cmd = [sys.executable, os.path.abspath(__file__), mode, src_path, pdf_path]
+    with _spire_lock:
+        try:
+            proc = subprocess.run(
+                cmd,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+            if proc.returncode != 0:
+                stderr = (proc.stderr or "").strip()
+                logger.error(f"Subprocess {mode} conversion failed (exit {proc.returncode}) for {src_path}: {stderr}")
+                return False
+            return os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0
+        except subprocess.TimeoutExpired:
+            logger.error(f"Subprocess {mode} conversion timed out after {timeout}s for {src_path}")
+            return False
+        except Exception as e:
+            logger.error(f"Subprocess {mode} conversion error for {src_path}: {e}")
+            return False
+
+
+def convert_pptx_to_pdf(pptx_path, pdf_path):
+    return _run_conversion_subprocess("pptx", pptx_path, pdf_path)
 
 
 def detect_file_type(file_path):
@@ -138,11 +177,11 @@ def detect_file_type(file_path):
     return ""
 
 
-def convert_docx_to_pdf(docx_path, pdf_path):
+def _convert_docx_in_process(docx_path, pdf_path):
+    actual_input_path = docx_path
+    created_temp = False
     try:
         # If the file doesn't end with .docx, create a temporary copy with .docx extension so Spire doesn't reject it
-        actual_input_path = docx_path
-        created_temp = False
         if not docx_path.lower().endswith(".docx") and not docx_path.lower().endswith(".doc"):
             actual_input_path = docx_path + ".docx"
             import shutil
@@ -155,13 +194,20 @@ def convert_docx_to_pdf(docx_path, pdf_path):
         doc.SaveToFile(pdf_path, DocFileFormat.PDF)
         doc.Dispose()
 
-        if created_temp and os.path.exists(actual_input_path):
-            os.remove(actual_input_path)
-
         return os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0
     except Exception as e:
         logger.error(f"Error converting DOCX {docx_path} to PDF: {e}")
         return False
+    finally:
+        if created_temp and os.path.exists(actual_input_path):
+            try:
+                os.remove(actual_input_path)
+            except OSError:
+                pass
+
+
+def convert_docx_to_pdf(docx_path, pdf_path):
+    return _run_conversion_subprocess("docx", docx_path, pdf_path)
 
 
 def convert_to_pdf(source_path, pdf_path):
@@ -205,3 +251,13 @@ def merge_pdfs(pdf_paths, output_path):
     except Exception as e:
         logger.error(f"Error merging PDFs: {e}")
         return False
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 4 or sys.argv[1] not in ("pptx", "docx"):
+        print("Usage: python pdf_utils.py <pptx|docx> <src_path> <pdf_path>", file=sys.stderr)
+        sys.exit(2)
+
+    mode_arg, src_arg, dst_arg = sys.argv[1], sys.argv[2], sys.argv[3]
+    ok = _convert_pptx_in_process(src_arg, dst_arg) if mode_arg == "pptx" else _convert_docx_in_process(src_arg, dst_arg)
+    sys.exit(0 if ok else 1)
